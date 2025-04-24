@@ -590,6 +590,29 @@ impl<T: EnableVpVtl<hvdef::hypercall::InitialVpContextX64>> HypercallDispatch<Hv
     }
 }
 
+/// Implements the `HvEnableVpVtl` hypercall.
+pub trait TdispDispatch {
+    /// Enable the specified VTL.
+    fn tdisp_dispatch(&mut self, some_value: u64) -> HvResult<()>;
+}
+
+/// Defines the `HvTdispDispatch` hypercall for x64.
+/// This hypercall is used to dispatch a TDISP command to the host.
+pub type HvTdispDispatch =
+    SimpleHypercall<defs::TdispGuestToHostCommand, (), { HypercallCode::HvCallTdispDispatch.0 }>;
+
+impl<T: TdispDispatch> HypercallDispatch<HvTdispDispatch> for T {
+    fn dispatch(&mut self, params: HypercallParameters<'_>) -> HypercallOutput {
+        HvTdispDispatch::run(params, |input| {
+            tracing::info!(
+                " !!! Host dispatching TDISP command: {:x}",
+                input.command_id
+            );
+            Ok(())
+        })
+    }
+}
+
 /// Defines the `HvEnableVpVtl` hypercall for arm64.
 pub type HvArm64EnableVpVtl =
     SimpleHypercall<defs::EnableVpVtlArm64, (), { HypercallCode::HvCallEnableVpVtl.0 }>;

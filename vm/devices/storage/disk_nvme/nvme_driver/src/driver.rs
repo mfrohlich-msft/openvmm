@@ -271,10 +271,18 @@ impl<T: DeviceBacking> NvmeDriver<T> {
 
     /// Enables the device, aliasing the admin queue memory and adding IO queues.
     async fn enable(&mut self, requested_io_queue_count: u16) -> anyhow::Result<()> {
+        tracing::info!(" !!! Enabling nvme device!");
+
         const ADMIN_QID: u16 = 0;
 
         let task = &mut self.task.as_mut().unwrap();
         let worker = task.task_mut();
+
+        if let Some(client) = worker.device.tdisp_client() {
+            client.tdisp_command_to_host(tdisp::GuestToHostCommand {
+                command_id: 0x12345678,
+            })?;
+        }
 
         // Request the admin queue pair be the same size to avoid potential
         // device bugs where differing sizes might be a less common scenario

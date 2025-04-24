@@ -70,4 +70,8 @@ impl<T: 'static + Send + InspectMut + MmioIntercept, U: 'static + DmaClient> Dev
     fn map_interrupt(&mut self, msix: u32, _cpu: u32) -> anyhow::Result<DeviceInterrupt> {
         self.device.map_interrupt(msix, _cpu)
     }
+
+    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>> {
+        None
+    }
 }

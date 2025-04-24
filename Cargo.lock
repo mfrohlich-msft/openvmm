@@ -2235,6 +2235,7 @@ dependencies = [
  "parking_lot",
  "pci_core",
  "scsi_buffers",
+ "tdisp",
  "user_driver",
  "user_driver_emulated_mock",
  "vmcore",
@@ -2775,6 +2776,7 @@ dependencies = [
  "sidecar_client",
  "signal-hook",
  "tdcall",
+ "tdisp",
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",
@@ -4630,6 +4632,7 @@ dependencies = [
 name = "nvme"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chipset_device",
  "device_emulators",
@@ -4693,6 +4696,7 @@ dependencies = [
  "scsi_buffers",
  "slab",
  "task_control",
+ "tdisp",
  "test_with_tracing",
  "thiserror 2.0.12",
  "tracing",
@@ -4846,6 +4850,23 @@ dependencies = [
  "memory_range",
  "mesh",
  "page_pool_alloc",
+ "user_driver",
+ "virt",
+ "vmcore",
+]
+
+[[package]]
+name = "openhcl_tdisp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "hcl",
+ "hcl_mapper",
+ "hvdef",
+ "inspect",
+ "lower_vtl_permissions_guard",
+ "tdisp",
+ "tracing",
  "user_driver",
  "virt",
  "vmcore",
@@ -5337,6 +5358,7 @@ dependencies = [
 name = "pci_core"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "bitfield-struct 0.10.1",
  "chipset_device",
  "guestmem",
@@ -6734,6 +6756,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tdisp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "hvdef",
+ "inspect",
+ "tracing",
+ "zerocopy 0.8.24",
+]
+
+[[package]]
 name = "tdx_guest_device"
 version = "0.0.0"
 dependencies = [
@@ -7471,6 +7504,7 @@ dependencies = [
  "nvme_resources",
  "openhcl_attestation_protocol",
  "openhcl_dma_manager",
+ "openhcl_tdisp",
  "pal",
  "pal_async",
  "pal_uring",
@@ -7723,6 +7757,7 @@ dependencies = [
  "pci_core",
  "safeatomic",
  "sparse_mmap",
+ "tdisp",
  "tracing",
  "uevent",
  "vfio-bindings",
@@ -7743,6 +7778,7 @@ dependencies = [
  "page_pool_alloc",
  "parking_lot",
  "pci_core",
+ "tdisp",
  "tracing",
  "user_driver",
 ]
@@ -7916,6 +7952,7 @@ name = "virt_kvm"
 version = "0.0.0"
 dependencies = [
  "aarch64defs",
+ "anyhow",
  "bitfield-struct 0.10.1",
  "build_rs_guest_arch",
  "cfg-if",

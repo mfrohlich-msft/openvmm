@@ -44,6 +44,10 @@ pub trait DeviceBacking: 'static + Send + Inspect {
     /// This can be called multiple times for the same interrupt without disconnecting
     /// previous mappings. The last `cpu` value will be used as the target CPU.
     fn map_interrupt(&mut self, msix: u32, cpu: u32) -> anyhow::Result<DeviceInterrupt>;
+
+    /// If this device is a TDISP-capable assigned device, return the TDISP client interface. If
+    /// this is not a TDISP device, returns None.
+    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>>;
 }
 
 /// Access to device registers.

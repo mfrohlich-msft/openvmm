@@ -36,6 +36,7 @@ libc.workspace = true
 pal_event.workspace = true
 sparse_mmap = { workspace = true, optional = true }
 vfio_sys = { workspace = true, optional = true }
+tdisp.workspace = true
 
 [lints]
 workspace = true

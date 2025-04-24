@@ -63,6 +63,9 @@ impl<T: CpuIo> WhpHypercallExit<'_, '_, T> {
             hv1_hypercall::HvGetVpIndexFromApicId,
             hv1_hypercall::HvAcceptGpaPages,
             hv1_hypercall::HvModifySparseGpaPageHostVisibility,
+            /// [TODO] TDISP: Add this to the trusted dispatchers.
+            #[cfg(guest_arch = "x86_64")]
+            hv1_hypercall::HvTdispDispatch,
         ]
     );
 }
@@ -1019,6 +1022,13 @@ mod x86 {
 
         fn inject_invalid_opcode_fault(&mut self) {
             self.registers.invalid_opcode = true;
+        }
+    }
+
+    impl<T: CpuIo> hv1_hypercall::TdispDispatch for WhpHypercallExit<'_, '_, T> {
+        fn tdisp_dispatch(&mut self, _some_val: u64) -> HvResult<()> {
+            tracing::info!("Not implemented: HvTdispDispatch");
+            Ok(())
         }
     }
 

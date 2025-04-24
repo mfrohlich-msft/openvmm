@@ -465,6 +465,13 @@ impl VtlReturn for TestHypercallHandler<'_> {
     }
 }
 
+impl TdispDispatch for TestHypercallHandler<'_> {
+    fn tdisp_dispatch(&mut self, _some_val: u64) -> HvResult<()> {
+        tracing::error!("Not implemented: HvTdispDispatch");
+        Err(HvError::InvalidHypercallCode)
+    }
+}
+
 impl VtlSwitchOps for TestHypercallHandler<'_> {
     fn advance_ip(&mut self) {
         X64RegisterIo::new(self, true).advance_ip();
@@ -491,6 +498,7 @@ impl<'a> TestHypercallHandler<'a> {
             // VtlReturn uses rather more custom handling. Add additional tests here using the
             // normal (non-test) trait.
             HvVtlReturn,
+            HvTdispDispatch,
         ]
     );
 

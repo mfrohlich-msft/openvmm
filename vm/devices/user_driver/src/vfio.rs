@@ -57,6 +57,7 @@ pub struct VfioDevice {
     #[inspect(skip)]
     config_space: vfio_sys::RegionInfo,
     dma_client: Arc<dyn DmaClient>,
+    tdisp_client: Option<Arc<dyn tdisp::ClientDevice>>,
 }
 
 #[derive(Inspect)]
@@ -131,6 +132,7 @@ impl VfioDevice {
             driver_source: driver_source.clone(),
             interrupts: Vec::new(),
             dma_client,
+            tdisp_client: None,
         };
 
         // Ensure bus master enable and memory space enable are set, and that
@@ -200,6 +202,13 @@ impl VfioDevice {
             read_fallback: SharedCounter::new(),
             write_fallback: SharedCounter::new(),
         })
+    }
+
+    /// Enables a TDISP client interface on this VFIO device.
+    /// [TODO] Traitify this?
+    pub fn enable_tdisp(&mut self, tdisp_client: Arc<dyn tdisp::ClientDevice>) {
+        assert!(self.tdisp_client.is_none());
+        self.tdisp_client = Some(tdisp_client);
     }
 }
 
@@ -306,6 +315,10 @@ impl DeviceBacking for VfioDevice {
         };
 
         Ok(interrupt.insert(new_interrupt).interrupt.clone())
+    }
+
+    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>> {
+        self.tdisp_client.clone()
     }
 }
 

@@ -1244,6 +1244,10 @@ impl pci_core::msi::MsiInterruptTarget for UhInterruptTarget {
         let vtl = self.vtl;
         Box::new(move |address, data| partition.request_msi(vtl, MsiRequest { address, data }))
     }
+
+    fn tdisp_dispatch(&mut self, some_val: u64) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
+    }
 }
 
 impl UhPartitionInner {

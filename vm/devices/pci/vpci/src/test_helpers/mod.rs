@@ -77,6 +77,10 @@ impl MsiInterruptTarget for TestVpciInterruptController {
         let controller = self.inner.clone();
         Box::new(move |address, data| controller.deliver_interrupt(address, data))
     }
+
+    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
+    }
 }
 
 impl MapVpciInterrupt for TestVpciInterruptController {

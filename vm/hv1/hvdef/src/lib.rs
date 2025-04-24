@@ -305,6 +305,9 @@ open_enum! {
         HvCallUnpinGpaPageRanges = 0x0113,
         HvCallQuerySparseGpaPageHostVisibility = 0x011C,
 
+        // [TODO] TDISP Emulation Hypercalls
+        HvCallTdispDispatch = 0x811D,
+
         // Extended hypercalls.
         HvExtCallQueryCapabilities = 0x8001,
     }
@@ -1567,6 +1570,12 @@ pub mod hypercall {
         pub target_vtl: u8,
         pub reserved: [u8; 3],
         pub vp_vtl_context: InitialVpContextArm64,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, IntoBytes, Immutable, KnownLayout, FromBytes)]
+    pub struct TdispGuestToHostCommand {
+        pub command_id: u64,
     }
 
     #[repr(C)]

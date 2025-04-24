@@ -38,6 +38,9 @@ tracing.workspace = true
 unicycle.workspace = true
 zerocopy = { workspace = true, features = ["alloc"] }
 
+# TDISP TODO: workaround
+anyhow.workspace = true
+
 [dev-dependencies]
 user_driver.workspace = true
 

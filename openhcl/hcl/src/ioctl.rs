@@ -1029,6 +1029,20 @@ impl MshvHvcall {
         Ok(())
     }
 
+    /// Invokes the HvCallTdispDispatch hypercall.
+    pub fn tdisp_dispatch(&self, command: tdisp::GuestToHostCommand) -> Result<(), HvError> {
+        // SAFETY: calling IOCTL as documented, with no special requirements.
+        let input: hvdef::hypercall::TdispGuestToHostCommand = command.into();
+
+        // SAFETY: calling IOCTL as documented, with no special requirements.
+        let output = unsafe {
+            self.hvcall(HypercallCode::HvCallTdispDispatch, &input, &mut ())
+                .expect("submitting hypercall should not fail")
+        };
+
+        output.result()
+    }
+
     /// Given a constructed hcl_hvcall protocol object, issues an IOCTL to invoke a hypercall via
     /// the direct hypercall kernel interface. This function will retry hypercalls if the hypervisor
     /// times out the hypercall.

@@ -33,6 +33,7 @@ bitfield-struct.workspace = true
 safe_intrinsics.workspace = true
 open_enum.workspace = true
 getrandom.workspace = true
+tdisp.workspace = true
 
 [build-dependencies]
 build_rs_guest_arch.workspace = true

@@ -1340,6 +1340,10 @@ impl MsiInterruptTarget for KvmMsiTarget {
         let interrupt = self.0.new_route(Some(event)).expect("BUGBUG");
         Box::new(GsiMsi { gsi: interrupt })
     }
+
+    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
+    }
 }
 
 impl MsiControl for GsiMsi {

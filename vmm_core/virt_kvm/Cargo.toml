@@ -34,6 +34,10 @@ thiserror.workspace = true
 tracing.workspace = true
 tracelimit.workspace = true
 zerocopy.workspace = true
+
+# TDISP TODO: workaround
+anyhow.workspace = true
+
 [build-dependencies]
 build_rs_guest_arch.workspace = true
 

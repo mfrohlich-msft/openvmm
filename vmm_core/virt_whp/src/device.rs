@@ -107,6 +107,10 @@ impl MsiInterruptTarget for Device {
     fn new_interrupt(&self) -> Box<dyn MsiControl> {
         todo!("software interrupts not supported right now")
     }
+
+    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
+    }
 }
 
 impl MapVpciInterrupt for Device {

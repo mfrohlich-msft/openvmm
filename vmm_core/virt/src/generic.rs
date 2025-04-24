@@ -621,6 +621,10 @@ impl MsiInterruptTarget for UnimplementedDevice {
     fn new_interrupt(&self) -> Box<dyn pci_core::msi::MsiControl> {
         match *self {}
     }
+
+    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
+    }
 }
 
 pub trait Synic: Send + Sync {

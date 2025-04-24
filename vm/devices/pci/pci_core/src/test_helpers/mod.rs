@@ -43,4 +43,8 @@ impl MsiInterruptTarget for TestPciInterruptController {
         let controller = self.inner.clone();
         Box::new(move |address, data| controller.msi_requests.lock().push_back((address, data)))
     }
+
+    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
+    }
 }

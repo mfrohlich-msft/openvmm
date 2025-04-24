@@ -22,10 +22,12 @@ use openhcl_dma_manager::AllocationVisibility;
 use openhcl_dma_manager::DmaClientParameters;
 use openhcl_dma_manager::DmaClientSpawner;
 use openhcl_dma_manager::LowerVtlPermissionPolicy;
+use openhcl_tdisp::VfioClientDevice;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use std::collections::HashMap;
 use std::collections::hash_map;
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::Instrument;
 use user_driver::vfio::VfioDevice;
@@ -51,6 +53,8 @@ enum InnerError {
     DeviceInitFailed(#[source] anyhow::Error),
     #[error("failed to create dma client for device")]
     DmaClient(#[source] anyhow::Error),
+    #[error("failed to dispatch a TDISP command")]
+    TdispClient(#[source] anyhow::Error),
     #[error("failed to get namespace {nsid}")]
     Namespace {
         nsid: u32,
@@ -315,10 +319,18 @@ impl NvmeManagerWorker {
                     })
                     .map_err(InnerError::DmaClient)?;
 
-                let device = VfioDevice::new(&self.driver_source, entry.key(), dma_client)
+                let mut device = VfioDevice::new(&self.driver_source, entry.key(), dma_client)
                     .instrument(tracing::info_span!("vfio_device_open", pci_id))
                     .await
                     .map_err(InnerError::Vfio)?;
+
+                let tdisp_interface = Arc::new(
+                    VfioClientDevice::new()
+                        .context("failed to create tdisp client")
+                        .map_err(InnerError::TdispClient)?,
+                );
+
+                device.enable_tdisp(tdisp_interface);
 
                 // TODO: For now, any isolation means use bounce buffering. This
                 // needs to change when we have nvme devices that support DMA to

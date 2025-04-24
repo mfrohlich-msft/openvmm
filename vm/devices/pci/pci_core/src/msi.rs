@@ -12,6 +12,12 @@ use vmcore::interrupt::Interrupt;
 pub trait MsiInterruptTarget: Send + Sync {
     /// Creates a new interrupt object.
     fn new_interrupt(&self) -> Box<dyn MsiControl>;
+
+    /// [TDISP TODO] This is a temporary workaround for the fact that the
+    /// software APIC deviceid table only supports interrupts as a target
+    /// for hypercalls. Flesh this out to a more generic trait that handles
+    /// both interrupts and other device callbacks.
+    fn tdisp_dispatch(&mut self, some_val: u64) -> anyhow::Result<()>;
 }
 
 /// Trait modelling an individual MSI interrupt.
