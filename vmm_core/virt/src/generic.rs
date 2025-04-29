@@ -32,6 +32,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::task::Poll;
 use std::task::Waker;
+use tdisp::TdispHostDeviceTarget;
 use vm_topology::memory::MemoryLayout;
 use vm_topology::processor::ProcessorTopology;
 use vmcore::monitor::MonitorId;
@@ -588,7 +589,7 @@ pub trait PartitionMemoryMapper {
 
 pub trait Hv1 {
     type Error: std::error::Error + Send + Sync + 'static;
-    type Device: MapVpciInterrupt + MsiInterruptTarget;
+    type Device: MapVpciInterrupt + MsiInterruptTarget + TdispHostDeviceTarget;
 
     fn reference_time_source(&self) -> Option<ReferenceTimeSource>;
 
@@ -620,10 +621,6 @@ impl MapVpciInterrupt for UnimplementedDevice {
 impl MsiInterruptTarget for UnimplementedDevice {
     fn new_interrupt(&self) -> Box<dyn pci_core::msi::MsiControl> {
         match *self {}
-    }
-
-    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
     }
 }
 

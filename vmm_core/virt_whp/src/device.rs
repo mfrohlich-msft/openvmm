@@ -16,6 +16,7 @@ use pci_core::msi::MsiInterruptTarget;
 use pci_core::spec::cfg_space;
 use std::os::windows::prelude::*;
 use std::sync::Arc;
+use tdisp::TdispHostDeviceTarget;
 use vmcore::device_state::ChangeDeviceState;
 use vmcore::save_restore::RestoreError;
 use vmcore::save_restore::SaveError;
@@ -107,10 +108,6 @@ impl MsiInterruptTarget for Device {
     fn new_interrupt(&self) -> Box<dyn MsiControl> {
         todo!("software interrupts not supported right now")
     }
-
-    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
-    }
 }
 
 impl MapVpciInterrupt for Device {
@@ -153,6 +150,17 @@ impl MapVpciInterrupt for Device {
         self.device().unmap_interrupt(index as u32).expect("BUGBUG");
 
         *m = None;
+    }
+}
+
+impl TdispHostDeviceTarget for Device {
+    fn tdisp_set_callback(&mut self, _callback: Box<tdisp::TdispCommandCallback>) {
+        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_set_callback");
+    }
+
+    fn tdisp_dispatch(&mut self, _command: tdisp::GuestToHostCommand) -> anyhow::Result<()> {
+        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_dispatch");
+        Ok(())
     }
 }
 

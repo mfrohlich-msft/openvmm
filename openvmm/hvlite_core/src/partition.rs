@@ -21,6 +21,7 @@ use memory_range::MemoryRange;
 use pci_core::msi::MsiInterruptTarget;
 use std::convert::Infallible;
 use std::sync::Arc;
+use tdisp::TdispHostDeviceTarget;
 #[cfg(guest_arch = "aarch64")]
 use virt::Aarch64Partition as ArchPartition;
 use virt::PageVisibility;
@@ -273,14 +274,21 @@ pub trait VpciDevice {
 
     /// Gets the [`MsiInterruptTarget`] interface to signal interrupts.
     fn target(self: Arc<Self>) -> Arc<dyn MsiInterruptTarget>;
+
+    /// Gets the [`TdispHostDeviceTarget`] interface to dispatch TDISP commands.
+    fn tdisp_host_device_target(self: Arc<Self>) -> Arc<dyn TdispHostDeviceTarget>;
 }
 
-impl<T: 'static + MapVpciInterrupt + MsiInterruptTarget> VpciDevice for T {
+impl<T: 'static + MapVpciInterrupt + MsiInterruptTarget + TdispHostDeviceTarget> VpciDevice for T {
     fn interrupt_mapper(self: Arc<Self>) -> VpciInterruptMapper {
         VpciInterruptMapper::new(self)
     }
 
     fn target(self: Arc<Self>) -> Arc<dyn MsiInterruptTarget> {
+        self
+    }
+
+    fn tdisp_host_device_target(self: Arc<Self>) -> Arc<dyn TdispHostDeviceTarget> {
         self
     }
 }

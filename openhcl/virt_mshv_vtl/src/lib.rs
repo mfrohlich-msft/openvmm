@@ -1221,7 +1221,7 @@ impl virt::VtlMemoryProtection for UhPartition {
     ///     safety.  The concern is freeing a page but forgetting to reset
     ///     permissions. See PagesAccessibleToLowerVtl for a sample wrapper.
     fn modify_vtl_page_setting(&self, pfn: u64, flags: HvMapGpaFlags) -> anyhow::Result<()> {
-        let address = pfn << hvdef::HV_PAGE_SHIFT;
+        let address: u64 = pfn << hvdef::HV_PAGE_SHIFT;
         self.inner
             .hcl
             .modify_vtl_protection_mask(
@@ -1243,10 +1243,6 @@ impl pci_core::msi::MsiInterruptTarget for UhInterruptTarget {
         let partition = self.partition.clone();
         let vtl = self.vtl;
         Box::new(move |address, data| partition.request_msi(vtl, MsiRequest { address, data }))
-    }
-
-    fn tdisp_dispatch(&mut self, some_val: u64) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
     }
 }
 

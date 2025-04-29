@@ -1026,9 +1026,14 @@ mod x86 {
     }
 
     impl<T: CpuIo> hv1_hypercall::TdispDispatch for WhpHypercallExit<'_, '_, T> {
-        fn tdisp_dispatch(&mut self, _some_val: u64) -> HvResult<()> {
-            tracing::info!("Not implemented: HvTdispDispatch");
-            Ok(())
+        fn tdisp_dispatch_from_guest(
+            &mut self,
+            command: hvdef::hypercall::TdispGuestToHostCommand,
+        ) -> HvResult<()> {
+            self.vp
+                .current_vtlp()
+                .software_devices
+                .tdisp_command_to_device(command.into())
         }
     }
 

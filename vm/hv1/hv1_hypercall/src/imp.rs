@@ -590,10 +590,11 @@ impl<T: EnableVpVtl<hvdef::hypercall::InitialVpContextX64>> HypercallDispatch<Hv
     }
 }
 
-/// Implements the `HvEnableVpVtl` hypercall.
+/// Implements the `HvTdispDispatch` hypercall functionality.
 pub trait TdispDispatch {
-    /// Enable the specified VTL.
-    fn tdisp_dispatch(&mut self, some_value: u64) -> HvResult<()>;
+    /// Process a TDISP command sent from the guest to the host.
+    fn tdisp_dispatch_from_guest(&mut self, command: defs::TdispGuestToHostCommand)
+    -> HvResult<()>;
 }
 
 /// Defines the `HvTdispDispatch` hypercall for x64.
@@ -608,6 +609,9 @@ impl<T: TdispDispatch> HypercallDispatch<HvTdispDispatch> for T {
                 " !!! Host dispatching TDISP command: {:x}",
                 input.command_id
             );
+
+            self.tdisp_dispatch_from_guest(*input)?;
+
             Ok(())
         })
     }

@@ -19,6 +19,9 @@ use zerocopy::KnownLayout;
 /// Represents a TDISP command sent from the guest to the host.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct GuestToHostCommand {
+    /// Device ID of the target device.
+    pub device_id: u64,
+
     /// The command ID.
     pub command_id: u64,
 }
@@ -26,6 +29,7 @@ pub struct GuestToHostCommand {
 impl From<hvdef::hypercall::TdispGuestToHostCommand> for GuestToHostCommand {
     fn from(value: hvdef::hypercall::TdispGuestToHostCommand) -> Self {
         Self {
+            device_id: value.device_id,
             command_id: value.command_id,
         }
     }
@@ -34,6 +38,7 @@ impl From<hvdef::hypercall::TdispGuestToHostCommand> for GuestToHostCommand {
 impl From<GuestToHostCommand> for hvdef::hypercall::TdispGuestToHostCommand {
     fn from(value: GuestToHostCommand) -> Self {
         Self {
+            device_id: value.device_id,
             command_id: value.command_id,
         }
     }
@@ -53,5 +58,26 @@ impl Display for GuestToHostCommand {
         f.debug_struct("GuestToHostCommand")
             .field("command_id", &self.command_id)
             .finish()
+    }
+}
+
+/// Callback for receiving TDISP commands from the guest.
+pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()> + Send + Sync;
+
+/// Trait added to host VPCI devices to allow them to dispatch TDISP commands from guests.
+pub trait TdispHostDeviceTarget: Send + Sync {
+    /// [TDISP TODO] This is a temporary workaround for the fact that the
+    /// software APIC deviceid table only supports interrupts as a target
+    /// for hypercalls. Flesh this out better, maybe a more generic device_id concept?
+    fn tdisp_dispatch(&mut self, _command: GuestToHostCommand) -> anyhow::Result<()> {
+        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_dispatch");
+        Ok(())
+    }
+
+    /// Set the callback function that receives TDISP commands from the guest. Replaces
+    /// any previously set callback.
+    /// [TDISP TODO] Async?
+    fn tdisp_set_callback(&mut self, _callback: Box<TdispCommandCallback>) {
+        tracing::warn!("TdispHostDeviceTarget not implemented: register_command_callback");
     }
 }

@@ -456,9 +456,5 @@ mod x86 {
                 }
             })
         }
-
-        fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
-            Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
-        }
     }
 }

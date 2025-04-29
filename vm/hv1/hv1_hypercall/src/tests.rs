@@ -22,6 +22,7 @@ use hvdef::HvError;
 use hvdef::HvResult;
 use hvdef::hypercall::Control;
 use hvdef::hypercall::HypercallOutput;
+use hvdef::hypercall::TdispGuestToHostCommand;
 use open_enum::open_enum;
 use sparse_mmap::SparseMapping;
 use std::vec;
@@ -466,7 +467,7 @@ impl VtlReturn for TestHypercallHandler<'_> {
 }
 
 impl TdispDispatch for TestHypercallHandler<'_> {
-    fn tdisp_dispatch(&mut self, _some_val: u64) -> HvResult<()> {
+    fn tdisp_dispatch_from_guest(&mut self, _command: TdispGuestToHostCommand) -> HvResult<()> {
         tracing::error!("Not implemented: HvTdispDispatch");
         Err(HvError::InvalidHypercallCode)
     }

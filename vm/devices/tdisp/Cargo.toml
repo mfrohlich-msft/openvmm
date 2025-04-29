@@ -8,10 +8,10 @@ rust-version.workspace = true
 
 [dependencies]
 inspect.workspace = true
-tracing.workspace = true
 anyhow.workspace = true
 zerocopy.workspace = true
 hvdef.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

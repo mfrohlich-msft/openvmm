@@ -42,6 +42,7 @@ use memory_range::MemoryRange;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use range_map_vec::RangeMap;
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::ops::Index;
 use std::ops::IndexMut;

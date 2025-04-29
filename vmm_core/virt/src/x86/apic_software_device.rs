@@ -14,6 +14,7 @@ use slab::Slab;
 use std::collections::HashMap;
 use std::collections::hash_map;
 use std::sync::Arc;
+use tdisp::TdispHostDeviceTarget;
 use thiserror::Error;
 use vmcore::vpci_msi::MapVpciInterrupt;
 use vmcore::vpci_msi::MsiAddressData;
@@ -35,15 +36,47 @@ pub struct ApicSoftwareDevices {
     inner: Arc<DevicesInner>,
 }
 
+type DeviceTableMap = Mutex<HashMap<u64, Arc<Mutex<dyn TdispHostDeviceTarget>>>>;
+type InterruptTableMap = Mutex<HashMap<u64, Arc<Mutex<InterruptTable>>>>;
+
+#[derive(Inspect)]
+struct ApicSoftwareDeviceTdispTarget {
+    #[inspect(skip)]
+    tdisp_callback: Option<Box<tdisp::TdispCommandCallback>>,
+}
+
+impl TdispHostDeviceTarget for ApicSoftwareDeviceTdispTarget {
+    fn tdisp_dispatch(&mut self, _command: tdisp::GuestToHostCommand) -> anyhow::Result<()> {
+        if let Some(callback) = &self.tdisp_callback {
+            callback(&_command)
+        } else {
+            tracelimit::warn_ratelimited!(
+                "Received TDISP command, but no callback registered for ApicSoftwareDevice",
+            );
+            Ok(())
+        }
+    }
+
+    fn tdisp_set_callback(&mut self, _callback: Box<tdisp::TdispCommandCallback>) {
+        self.tdisp_callback = Some(_callback);
+    }
+}
+
 #[derive(Inspect)]
 struct DevicesInner {
     #[inspect(flatten, with = "inspect_tables")]
-    tables: Mutex<HashMap<u64, Arc<Mutex<InterruptTable>>>>,
+    tables: InterruptTableMap,
+
+    // TDISP TODO: Make this inspectable
+    // #[inspect(with = "inspect_device_id_table")]
+    #[inspect(skip)]
+    device_table: DeviceTableMap,
+
     #[inspect(skip)]
     apic_id_map: Vec<u32>,
 }
 
-fn inspect_tables(tables: &Mutex<HashMap<u64, Arc<Mutex<InterruptTable>>>>) -> impl '_ + Inspect {
+fn inspect_tables(tables: &InterruptTableMap) -> impl '_ + Inspect {
     inspect::adhoc(|req| {
         let mut resp = req.respond();
         for (device_id, table) in &*tables.lock() {
@@ -61,6 +94,7 @@ impl ApicSoftwareDevices {
         Self {
             inner: Arc::new(DevicesInner {
                 tables: Default::default(),
+                device_table: Default::default(),
                 apic_id_map,
             }),
         }
@@ -81,11 +115,26 @@ impl ApicSoftwareDevices {
             };
             entry.insert(table.clone());
         }
+
+        let tdisp_target = Arc::new(Mutex::new(ApicSoftwareDeviceTdispTarget {
+            tdisp_callback: None,
+        }));
+
+        {
+            let mut tables = self.inner.device_table.lock();
+            let entry = match tables.entry(device_id) {
+                hash_map::Entry::Occupied(_) => return Err(DeviceIdInUse(device_id)),
+                hash_map::Entry::Vacant(e) => e,
+            };
+            entry.insert(tdisp_target.clone());
+        }
+
         Ok(ApicSoftwareDevice {
             devices: self.inner.clone(),
             target,
             table,
             id: device_id,
+            tdisp_target,
         })
     }
 
@@ -119,6 +168,35 @@ impl ApicSoftwareDevices {
 
         Ok(())
     }
+
+    /// Delivers a TDISP command sent from the guest to the host to the
+    /// backing device.
+    pub fn tdisp_command_to_device(&self, command: tdisp::GuestToHostCommand) -> HvResult<()> {
+        let device = self
+            .inner
+            .device_table
+            .lock()
+            .get(&command.device_id)
+            .cloned()
+            .ok_or(HvError::InvalidDeviceId)?;
+
+        tracing::debug!("tdisp_command_to_device: {:?} found device!", command);
+
+        // [TDISP TODO] Do something to not type erase the error?
+        let res = device.lock().tdisp_dispatch(command);
+
+        if let Err(err) = res {
+            tracing::error!(
+                "tdisp_command_to_device: {:?} failed to dispatch command: {:?}",
+                command,
+                err
+            );
+
+            return Err(HvError::InvalidHypercallInput);
+        }
+
+        Ok(())
+    }
 }
 
 /// The software implementation of a VPCI-compatible device.
@@ -127,11 +205,26 @@ pub struct ApicSoftwareDevice {
     table: Arc<Mutex<InterruptTable>>,
     target: Arc<dyn MsiInterruptTarget>,
     id: u64,
+
+    /// Callback for receiving TDISP commands from the guest for this device.
+    tdisp_target: Arc<Mutex<dyn TdispHostDeviceTarget>>,
 }
 
 impl Drop for ApicSoftwareDevice {
     fn drop(&mut self) {
         let _table = self.devices.tables.lock().remove(&self.id);
+    }
+}
+
+impl TdispHostDeviceTarget for ApicSoftwareDevice {
+    fn tdisp_dispatch(&mut self, command: tdisp::GuestToHostCommand) -> anyhow::Result<()> {
+        let mut target = self.tdisp_target.lock();
+        target.tdisp_dispatch(command)
+    }
+
+    fn tdisp_set_callback(&mut self, callback: Box<tdisp::TdispCommandCallback>) {
+        let mut target = self.tdisp_target.lock();
+        target.tdisp_set_callback(callback)
     }
 }
 
@@ -344,10 +437,6 @@ impl MsiInterruptTarget for ApicSoftwareDevice {
             self.table.clone(),
             self.target.new_interrupt(),
         ))
-    }
-
-    fn tdisp_dispatch(&mut self, _some_val: u64) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("Not implemented: tdisp_dispatch"))
     }
 }
 

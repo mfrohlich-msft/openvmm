@@ -27,6 +27,8 @@ slab.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 zerocopy.workspace = true
+tdisp.workspace = true
+
 [dev-dependencies]
 
 [build-dependencies]
