@@ -154,12 +154,15 @@ impl MapVpciInterrupt for Device {
 }
 
 impl TdispHostDeviceTarget for Device {
-    fn tdisp_set_callback(&mut self, _callback: Box<tdisp::TdispCommandCallback>) {
-        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_set_callback");
+    fn tdisp_add_command_callback(&self, _callback: Box<tdisp::TdispCommandCallback>) {
+        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_add_command_callback");
     }
 
-    fn tdisp_dispatch(&mut self, _command: tdisp::GuestToHostCommand) -> anyhow::Result<()> {
-        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_dispatch");
+    fn tdisp_handle_guest_command(
+        &mut self,
+        _command: tdisp::GuestToHostCommand,
+    ) -> anyhow::Result<()> {
+        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_handle_guest_command");
         Ok(())
     }
 }

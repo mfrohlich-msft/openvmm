@@ -40,6 +40,7 @@ use pci_core::spec::hwid::HardwareIds;
 use pci_core::spec::hwid::ProgrammingInterface;
 use pci_core::spec::hwid::Subclass;
 use std::sync::Arc;
+use tdisp::TdispHostDeviceTarget;
 use vmcore::device_state::ChangeDeviceState;
 use vmcore::save_restore::SaveError;
 use vmcore::save_restore::SaveRestore;
@@ -112,6 +113,7 @@ impl NvmeController {
         guest_memory: GuestMemory,
         register_msi: &mut dyn RegisterMsi,
         register_mmio: &mut dyn RegisterMmioIntercept,
+        tdisp_host_device_target: Option<Arc<dyn TdispHostDeviceTarget>>,
         caps: NvmeControllerCaps,
     ) -> Self {
         let (msix, msix_cap) = MsixEmulator::new(4, caps.msix_count, register_msi);
@@ -154,6 +156,13 @@ impl NvmeController {
             Arc::clone(&qe_sizes),
             caps.subsystem_id,
         );
+
+        if let Some(tdisp_host_device_target) = tdisp_host_device_target {
+            tdisp_host_device_target.tdisp_add_command_callback(Box::new(|x| {
+                tracing::error!("tdisp command not supported: {:?}", x);
+                Ok(())
+            }));
+        }
 
         Self {
             cfg_space,

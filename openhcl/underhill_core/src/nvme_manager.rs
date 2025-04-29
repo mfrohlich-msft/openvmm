@@ -22,7 +22,7 @@ use openhcl_dma_manager::AllocationVisibility;
 use openhcl_dma_manager::DmaClientParameters;
 use openhcl_dma_manager::DmaClientSpawner;
 use openhcl_dma_manager::LowerVtlPermissionPolicy;
-use openhcl_tdisp::VfioClientDevice;
+use openhcl_tdisp::TdispVfioClientDevice;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use std::collections::HashMap;
@@ -76,14 +76,18 @@ impl Inspect for NvmeManager {
         let mut resp = req.respond();
         // Pull out the field that force loads a driver on a device and handle
         // it separately.
-        resp.child("force_load_pci_id", |req| match req.update() {
-            Ok(update) => {
-                self.client
-                    .sender
-                    .send(Request::ForceLoadDriver(update.defer()));
-            }
-            Err(req) => req.value(""),
-        });
+
+        // [TDISP TODO] This doesn't work without a device_id field. This can be
+        // inferred from the pci_id...
+
+        // resp.child("force_load_pci_id", |req| match req.update() {
+        //     Ok(update) => {
+        //         self.client
+        //             .sender
+        //             .send(Request::ForceLoadDriver(update.defer()));
+        //     }
+        //     Err(req) => req.value("".into()),
+        // });
         // Send the remaining fields directly to the worker.
         resp.merge(inspect::adhoc(|req| {
             self.client.sender.send(Request::Inspect(req.defer()))
@@ -179,7 +183,7 @@ impl NvmeManager {
 enum Request {
     Inspect(inspect::Deferred),
     ForceLoadDriver(inspect::DeferredUpdate),
-    GetNamespace(Rpc<(String, u32), Result<nvme_driver::Namespace, NamespaceError>>),
+    GetNamespace(Rpc<(String, u32, u64), Result<nvme_driver::Namespace, NamespaceError>>),
     Save(Rpc<(), Result<NvmeManagerSavedState, anyhow::Error>>),
     Shutdown {
         span: tracing::Span,
@@ -197,11 +201,17 @@ impl NvmeManagerClient {
         &self,
         pci_id: String,
         nsid: u32,
+        device_id: u64,
     ) -> anyhow::Result<nvme_driver::Namespace> {
         Ok(self
             .sender
-            .call(Request::GetNamespace, (pci_id.clone(), nsid))
-            .instrument(tracing::info_span!("nvme_get_namespace", pci_id, nsid))
+            .call(Request::GetNamespace, (pci_id.clone(), nsid, device_id))
+            .instrument(tracing::info_span!(
+                "nvme_get_namespace",
+                pci_id,
+                nsid,
+                device_id
+            ))
             .await
             .context("nvme manager is shut down")??)
     }
@@ -239,6 +249,7 @@ impl NvmeManagerWorker {
             match req {
                 Request::Inspect(deferred) => deferred.inspect(&self),
                 Request::ForceLoadDriver(update) => {
+<<<<<<< HEAD
                     match self.get_driver(update.new_value().to_owned()).await {
                         Ok(_) => {
                             let pci_id = update.new_value().to_string();
@@ -248,10 +259,24 @@ impl NvmeManagerWorker {
                             update.fail(err);
                         }
                     }
+=======
+                    // [TDISP TODO] This doesn't work without a device_id field. This can be
+                    // inferred from the pci_id...
+
+                    // match self.get_driver(update.new_value().to_owned()).await {
+                    //     Ok(_) => {
+                    //         let pci_id = update.new_value().into();
+                    //         update.succeed(pci_id);
+                    //     }
+                    //     Err(err) => {
+                    //         update.fail(err);
+                    //     }
+                    // }
+>>>>>>> 9a16bee6 (Finally routed hypercall from nvme usermode to nvme host)
                 }
                 Request::GetNamespace(rpc) => {
-                    rpc.handle(async |(pci_id, nsid)| {
-                        self.get_namespace(pci_id.clone(), nsid)
+                    rpc.handle(async |(pci_id, nsid, device_id)| {
+                        self.get_namespace(pci_id.clone(), nsid, device_id)
                             .map_err(|source| NamespaceError { pci_id, source })
                             .await
                     })
@@ -301,6 +326,7 @@ impl NvmeManagerWorker {
     async fn get_driver(
         &mut self,
         pci_id: String,
+        device_id: u64,
     ) -> Result<&mut nvme_driver::NvmeDriver<VfioDevice>, InnerError> {
         let driver = match self.devices.entry(pci_id.to_owned()) {
             hash_map::Entry::Occupied(entry) => entry.into_mut(),
@@ -325,7 +351,7 @@ impl NvmeManagerWorker {
                     .map_err(InnerError::Vfio)?;
 
                 let tdisp_interface = Arc::new(
-                    VfioClientDevice::new()
+                    TdispVfioClientDevice::new(device_id)
                         .context("failed to create tdisp client")
                         .map_err(InnerError::TdispClient)?,
                 );
@@ -358,8 +384,9 @@ impl NvmeManagerWorker {
         &mut self,
         pci_id: String,
         nsid: u32,
+        device_id: u64,
     ) -> Result<nvme_driver::Namespace, InnerError> {
-        let driver = self.get_driver(pci_id.to_owned()).await?;
+        let driver = self.get_driver(pci_id.to_owned(), device_id).await?;
         driver
             .namespace(nsid)
             .await
@@ -452,7 +479,7 @@ impl AsyncResolveResource<DiskHandleKind, NvmeDiskConfig> for NvmeDiskResolver {
     ) -> Result<Self::Output, Self::Error> {
         let namespace = self
             .manager
-            .get_namespace(rsrc.pci_id, rsrc.nsid)
+            .get_namespace(rsrc.pci_id, rsrc.nsid, rsrc.device_id)
             .await
             .context("could not open nvme namespace")?;
 
@@ -464,6 +491,9 @@ impl AsyncResolveResource<DiskHandleKind, NvmeDiskConfig> for NvmeDiskResolver {
 pub struct NvmeDiskConfig {
     pub pci_id: String,
     pub nsid: u32,
+
+    /// Hypervisor device ID.
+    pub device_id: u64,
 }
 
 impl ResourceId<DiskHandleKind> for NvmeDiskConfig {

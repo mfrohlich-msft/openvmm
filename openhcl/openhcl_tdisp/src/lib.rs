@@ -12,24 +12,31 @@ use tdisp::ClientDevice;
 use tdisp::GuestToHostCommand;
 
 /// Implements the `ClientDevice` trait for a VFIO device.
-pub struct VfioClientDevice {
+pub struct TdispVfioClientDevice {
     /// Hypercall interface to the host.
     mshv_hvcall: hcl::ioctl::MshvHvcall,
+
+    /// Hypervisor device ID.
+    device_id: u64,
 }
 
-impl VfioClientDevice {
+impl TdispVfioClientDevice {
     /// Creates a new `VfioClientDevice` instance.
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(device_id: u64) -> anyhow::Result<Self> {
         let mshv_hvcall = hcl::ioctl::MshvHvcall::new().context("failed to open mshv_hvcall")?;
         mshv_hvcall.set_allowed_hypercalls(&[hvdef::HypercallCode::HvCallTdispDispatch]);
 
-        Ok(Self { mshv_hvcall })
+        Ok(Self {
+            mshv_hvcall,
+            device_id,
+        })
     }
 }
 
-impl ClientDevice for VfioClientDevice {
-    fn tdisp_command_to_host(&self, command: GuestToHostCommand) -> anyhow::Result<()> {
+impl ClientDevice for TdispVfioClientDevice {
+    fn tdisp_command_to_host(&self, mut command: GuestToHostCommand) -> anyhow::Result<()> {
         tracing::debug!("tdisp command to host: {}", command);
+        command.device_id = self.device_id;
         self.mshv_hvcall
             .tdisp_dispatch(command)
             .context("failed to dispatch TDISP command")?;
@@ -38,7 +45,7 @@ impl ClientDevice for VfioClientDevice {
     }
 }
 
-impl Inspect for VfioClientDevice {
+impl Inspect for TdispVfioClientDevice {
     fn inspect(&self, req: inspect::Request<'_>) {
         req.respond().field("tdisp-client", self);
     }

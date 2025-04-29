@@ -42,23 +42,24 @@ type InterruptTableMap = Mutex<HashMap<u64, Arc<Mutex<InterruptTable>>>>;
 #[derive(Inspect)]
 struct ApicSoftwareDeviceTdispTarget {
     #[inspect(skip)]
-    tdisp_callback: Option<Box<tdisp::TdispCommandCallback>>,
+    subscribers: Arc<Mutex<Vec<Box<tdisp::TdispCommandCallback>>>>,
 }
 
 impl TdispHostDeviceTarget for ApicSoftwareDeviceTdispTarget {
-    fn tdisp_dispatch(&mut self, _command: tdisp::GuestToHostCommand) -> anyhow::Result<()> {
-        if let Some(callback) = &self.tdisp_callback {
-            callback(&_command)
-        } else {
-            tracelimit::warn_ratelimited!(
-                "Received TDISP command, but no callback registered for ApicSoftwareDevice",
-            );
-            Ok(())
+    fn tdisp_handle_guest_command(
+        &mut self,
+        command: tdisp::GuestToHostCommand,
+    ) -> anyhow::Result<()> {
+        let subscribers = self.subscribers.lock();
+        for callback in subscribers.iter() {
+            callback(&command)?;
         }
+
+        Ok(())
     }
 
-    fn tdisp_set_callback(&mut self, _callback: Box<tdisp::TdispCommandCallback>) {
-        self.tdisp_callback = Some(_callback);
+    fn tdisp_add_command_callback(&self, callback: Box<tdisp::TdispCommandCallback>) {
+        self.subscribers.lock().push(callback);
     }
 }
 
@@ -117,7 +118,7 @@ impl ApicSoftwareDevices {
         }
 
         let tdisp_target = Arc::new(Mutex::new(ApicSoftwareDeviceTdispTarget {
-            tdisp_callback: None,
+            subscribers: Default::default(),
         }));
 
         {
@@ -171,7 +172,7 @@ impl ApicSoftwareDevices {
 
     /// Delivers a TDISP command sent from the guest to the host to the
     /// backing device.
-    pub fn tdisp_command_to_device(&self, command: tdisp::GuestToHostCommand) -> HvResult<()> {
+    pub fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> HvResult<()> {
         let device = self
             .inner
             .device_table
@@ -180,14 +181,14 @@ impl ApicSoftwareDevices {
             .cloned()
             .ok_or(HvError::InvalidDeviceId)?;
 
-        tracing::debug!("tdisp_command_to_device: {:?} found device!", command);
+        tracing::debug!("tdisp_command_from_guest: {:?} found device!", command);
 
         // [TDISP TODO] Do something to not type erase the error?
-        let res = device.lock().tdisp_dispatch(command);
+        let res = device.lock().tdisp_handle_guest_command(command);
 
         if let Err(err) = res {
             tracing::error!(
-                "tdisp_command_to_device: {:?} failed to dispatch command: {:?}",
+                "tdisp_command_from_guest: {:?} failed to dispatch command: {:?}",
                 command,
                 err
             );
@@ -217,14 +218,17 @@ impl Drop for ApicSoftwareDevice {
 }
 
 impl TdispHostDeviceTarget for ApicSoftwareDevice {
-    fn tdisp_dispatch(&mut self, command: tdisp::GuestToHostCommand) -> anyhow::Result<()> {
+    fn tdisp_handle_guest_command(
+        &mut self,
+        command: tdisp::GuestToHostCommand,
+    ) -> anyhow::Result<()> {
         let mut target = self.tdisp_target.lock();
-        target.tdisp_dispatch(command)
+        target.tdisp_handle_guest_command(command)
     }
 
-    fn tdisp_set_callback(&mut self, callback: Box<tdisp::TdispCommandCallback>) {
-        let mut target = self.tdisp_target.lock();
-        target.tdisp_set_callback(callback)
+    fn tdisp_add_command_callback(&self, callback: Box<tdisp::TdispCommandCallback>) {
+        let target = self.tdisp_target.lock();
+        target.tdisp_add_command_callback(callback)
     }
 }
 

@@ -1033,7 +1033,7 @@ mod x86 {
             self.vp
                 .current_vtlp()
                 .software_devices
-                .tdisp_command_to_device(command.into())
+                .tdisp_command_from_guest(command.into())
         }
     }
 

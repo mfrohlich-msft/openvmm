@@ -975,7 +975,12 @@ async fn make_disk_type_from_physical_device(
         )
     {
         // Wait for the NVMe controller to arrive.
-        let (pci_id, devpath) = vpci_path(&controller_instance_id);
+        let (pci_id, devpath, device_id) = vpci_path(&controller_instance_id);
+        let devpath_display = devpath.to_string_lossy();
+        tracing::error!(
+            " !!! controller_instance_id: {controller_instance_id}, pci_id: {pci_id}, devpath: {devpath_display}"
+        );
+
         async {
             ctx.until_cancelled(storage_context.uevent_listener.wait_for_devpath(&devpath))
                 .await??;
@@ -995,6 +1000,7 @@ async fn make_disk_type_from_physical_device(
         return Ok(Resource::new(NvmeDiskConfig {
             pci_id,
             nsid: sub_device_path,
+            device_id,
         }));
     }
 
@@ -1616,7 +1622,7 @@ async fn nvme_controller_path_from_vmbus_instance_id(
     uevent_listener: &UeventListener,
     instance_id: &Guid,
 ) -> anyhow::Result<PathBuf> {
-    let (pci_id, mut devpath) = vpci_path(instance_id);
+    let (pci_id, mut devpath, _device_id) = vpci_path(instance_id);
     devpath.push("nvme");
     let devpath = uevent_listener
         .wait_for_matching_child(&devpath, async |path, _uevent| Some(path))
@@ -1625,7 +1631,7 @@ async fn nvme_controller_path_from_vmbus_instance_id(
     Ok(devpath)
 }
 
-fn vpci_path(instance_id: &Guid) -> (String, PathBuf) {
+fn vpci_path(instance_id: &Guid) -> (String, PathBuf, u64) {
     // The RID of a VPCI device is derived from its vmbus channel instance ID by
     // using Data2 as the segment ID and setting bus, device and function number to zero.
     let pci_id = format!("{:04x}:00:00.0", instance_id.data2);
@@ -1638,7 +1644,10 @@ fn vpci_path(instance_id: &Guid) -> (String, PathBuf) {
         "/sys/bus/vmbus/devices/{instance_id}/pci{pci_bus_id}/{pci_id}"
     ));
 
-    (pci_id, devpath)
+    // Hypervisor device ID is derived from the VMBus instance ID.
+    let device_id = (instance_id.data2 as u64) << 16 | (instance_id.data3 as u64 & 0xfff8);
+
+    (pci_id, devpath, device_id)
 }
 
 /// Waits for the PCI path to get populated. The PCI path is just a symlink to the actual
@@ -1665,7 +1674,7 @@ pub async fn wait_for_mana(
     uevent_listener: &UeventListener,
     instance_id: &Guid,
 ) -> anyhow::Result<String> {
-    let (pci_id, devpath) = vpci_path(instance_id);
+    let (pci_id, devpath, _device_id) = vpci_path(instance_id);
 
     // Wait for the device to show up.
     uevent_listener.wait_for_devpath(&devpath).await?;

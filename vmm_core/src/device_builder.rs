@@ -9,6 +9,7 @@ use guestmem::GuestMemory;
 use pci_core::msi::MsiInterruptSet;
 use pci_core::msi::MsiInterruptTarget;
 use std::sync::Arc;
+use tdisp::TdispHostDeviceTarget;
 use vm_resource::Resource;
 use vm_resource::ResourceResolver;
 use vm_resource::kind::PciDeviceHandleKind;
@@ -34,12 +35,18 @@ pub async fn build_vpci_device(
         u64,
     ) -> anyhow::Result<(
         Arc<dyn MsiInterruptTarget>,
-        VpciInterruptMapper,
+        Arc<dyn VpciInterruptMapper>,
+        Arc<dyn TdispHostDeviceTarget>,
     )>,
 ) -> anyhow::Result<()> {
     let device_name = format!("{}:vpci-{instance_id}", resource.id());
 
     let mut msi_set = MsiInterruptSet::new();
+    let device_id = (instance_id.data2 as u64) << 16 | (instance_id.data3 as u64 & 0xfff8);
+
+    // [TDISP TODO] Not all devices support TDISP, so we need to check this and not create a host device target if it's not supported.
+    let (msi_controller, interrupt_mapper, tdisp_host_device_target) =
+        new_virtual_device(device_id).context("failed to create virtual device")?;
 
     let device = {
         chipset_builder
@@ -52,6 +59,7 @@ pub async fn build_vpci_device(
                         pci_resources::ResolvePciDeviceHandleParams {
                             register_msi: &mut msi_set,
                             register_mmio: &mut services.register_mmio(),
+                            tdisp_host_device_target: Some(tdisp_host_device_target.clone()),
                             driver_source,
                             guest_memory,
                             doorbell_registration,
@@ -65,14 +73,13 @@ pub async fn build_vpci_device(
     };
 
     {
-        let device_id = (instance_id.data2 as u64) << 16 | (instance_id.data3 as u64 & 0xfff8);
         let vpci_bus_name = format!("vpci:{instance_id}");
+
+        tracing::error!(" !!! device_id: 0x{device_id:x}, vpci_bus_name: {vpci_bus_name}");
+
         chipset_builder
             .arc_mutex_device(vpci_bus_name)
             .try_add_async(async |services| {
-                let (msi_controller, interrupt_mapper) =
-                    new_virtual_device(device_id).context("failed to create virtual device")?;
-
                 msi_set.connect(msi_controller.as_ref());
 
                 let bus = vpci::bus::VpciBus::new(

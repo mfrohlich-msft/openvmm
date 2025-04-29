@@ -57,6 +57,7 @@ impl AsyncResolveResource<PciDeviceHandleKind, NvmeControllerHandle> for NvmeCon
             input.guest_memory.clone(),
             input.register_msi,
             input.register_mmio,
+            input.tdisp_host_device_target,
             NvmeControllerCaps {
                 msix_count: resource.msix_count,
                 max_io_queues: resource.max_io_queues,

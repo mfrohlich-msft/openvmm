@@ -19,6 +19,7 @@ pci_resources.workspace = true
 
 chipset_device.workspace = true
 guestmem.workspace = true
+tdisp.workspace = true
 vmcore.workspace = true
 vm_resource.workspace = true
 
@@ -38,6 +39,8 @@ tracing.workspace = true
 unicycle.workspace = true
 zerocopy = { workspace = true, features = ["alloc"] }
 
+# [TDISP TODO]
+anyhow.workspace = true
 [dev-dependencies]
 user_driver.workspace = true
 

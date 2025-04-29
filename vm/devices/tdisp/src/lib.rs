@@ -69,7 +69,7 @@ pub trait TdispHostDeviceTarget: Send + Sync {
     /// [TDISP TODO] This is a temporary workaround for the fact that the
     /// software APIC deviceid table only supports interrupts as a target
     /// for hypercalls. Flesh this out better, maybe a more generic device_id concept?
-    fn tdisp_dispatch(&mut self, _command: GuestToHostCommand) -> anyhow::Result<()> {
+    fn tdisp_handle_guest_command(&mut self, _command: GuestToHostCommand) -> anyhow::Result<()> {
         tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_dispatch");
         Ok(())
     }
@@ -77,7 +77,15 @@ pub trait TdispHostDeviceTarget: Send + Sync {
     /// Set the callback function that receives TDISP commands from the guest. Replaces
     /// any previously set callback.
     /// [TDISP TODO] Async?
-    fn tdisp_set_callback(&mut self, _callback: Box<TdispCommandCallback>) {
+    fn tdisp_add_command_callback(&self, _callback: Box<TdispCommandCallback>) {
         tracing::warn!("TdispHostDeviceTarget not implemented: register_command_callback");
     }
+}
+
+/// Trait implemented by TDISP-capable devices on the client side. This includes devices that
+/// are assigned to isolated partitions other than the host.
+pub trait TdispClientDevice: Send + Sync {
+    /// Send a TDISP command to the host for this device.
+    /// [TDISP TODO] Async? Better handling of device_id in GuestToHostCommand?
+    fn tdisp_command_to_host(&self, command: GuestToHostCommand) -> anyhow::Result<()>;
 }

@@ -1929,6 +1929,7 @@ impl InitializedVm {
                             Ok((
                                 hv_device.clone().target(),
                                 hv_device.clone().interrupt_mapper(),
+                                hv_device.clone().tdisp_host_device_target(),
                             ))
                         },
                     )

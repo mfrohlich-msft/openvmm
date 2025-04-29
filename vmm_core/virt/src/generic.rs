@@ -32,6 +32,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::task::Poll;
 use std::task::Waker;
+use tdisp::TdispClientDevice;
 use tdisp::TdispHostDeviceTarget;
 use vm_topology::memory::MemoryLayout;
 use vm_topology::processor::ProcessorTopology;
@@ -620,6 +621,19 @@ impl MapVpciInterrupt for UnimplementedDevice {
 
 impl MsiInterruptTarget for UnimplementedDevice {
     fn new_interrupt(&self) -> Box<dyn pci_core::msi::MsiControl> {
+        match *self {}
+    }
+}
+
+impl TdispHostDeviceTarget for UnimplementedDevice {
+    fn tdisp_handle_guest_command(
+        &mut self,
+        _command: tdisp::GuestToHostCommand,
+    ) -> anyhow::Result<()> {
+        match *self {}
+    }
+
+    fn tdisp_add_command_callback(&self, _callback: Box<tdisp::TdispCommandCallback>) {
         match *self {}
     }
 }
