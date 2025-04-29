@@ -4633,7 +4633,6 @@ dependencies = [
 name = "nvme"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "chipset_device",
  "device_emulators",
@@ -5354,7 +5353,6 @@ dependencies = [
 name = "pci_core"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "bitfield-struct 0.10.1",
  "chipset_device",
  "guestmem",
@@ -5362,7 +5360,6 @@ dependencies = [
  "mesh",
  "open_enum",
  "parking_lot",
- "tdisp",
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",
@@ -7950,7 +7947,6 @@ name = "virt_kvm"
 version = "0.0.0"
 dependencies = [
  "aarch64defs",
- "anyhow",
  "bitfield-struct 0.10.1",
  "build_rs_guest_arch",
  "cfg-if",
@@ -8041,7 +8037,6 @@ dependencies = [
  "safe_intrinsics",
  "safeatomic",
  "sidecar_client",
- "tdisp",
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",

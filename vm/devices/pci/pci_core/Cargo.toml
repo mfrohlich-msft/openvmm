@@ -21,8 +21,5 @@ tracelimit.workspace = true
 tracing.workspace = true
 zerocopy.workspace = true
 
-# TDISP TODO: workaround
-anyhow.workspace = true
-tdisp.workspace = true
 [lints]
 workspace = true

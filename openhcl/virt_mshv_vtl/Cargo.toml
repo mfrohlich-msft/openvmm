@@ -54,7 +54,6 @@ thiserror.workspace = true
 tracing.workspace = true
 zerocopy.workspace = true
 safe_intrinsics.workspace = true
-tdisp.workspace = true
 
 [build-dependencies]
 build_rs_guest_arch.workspace = true
