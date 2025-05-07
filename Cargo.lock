@@ -530,7 +530,6 @@ version = "0.0.0"
 dependencies = [
  "inspect",
  "mesh",
- "tdisp",
 ]
 
 [[package]]
@@ -4634,7 +4633,6 @@ dependencies = [
 name = "nvme"
 version = "0.0.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "chipset_device",
  "device_emulators",
@@ -5379,7 +5377,6 @@ dependencies = [
  "chipset_device_resources",
  "guestmem",
  "pci_core",
- "tdisp",
  "vm_resource",
  "vmcore",
 ]
