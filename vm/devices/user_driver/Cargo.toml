@@ -17,7 +17,6 @@ inspect_counters.workspace = true
 mesh.workspace = true
 pal_async.workspace = true
 pci_core.workspace = true
-safeatomic.workspace = true
 uevent.workspace = true
 event-listener.workspace = true
 guestmem.workspace = true

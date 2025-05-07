@@ -2235,7 +2235,6 @@ dependencies = [
  "parking_lot",
  "pci_core",
  "scsi_buffers",
- "tdisp",
  "user_driver",
  "user_driver_emulated_mock",
  "vmcore",
@@ -4864,8 +4863,22 @@ dependencies = [
  "hcl",
  "hvdef",
  "inspect",
+<<<<<<< HEAD
+=======
+ "memoryblock",
+ "openhcl_tdisp_resources",
  "tdisp",
  "tracing",
+]
+
+[[package]]
+name = "openhcl_tdisp_resources"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "inspect",
+>>>>>>> 0b1a23c2 (rules)
+ "tdisp",
 ]
 
 [[package]]
@@ -6759,7 +6772,6 @@ dependencies = [
  "hvdef",
  "inspect",
  "tracing",
- "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -7751,7 +7763,6 @@ dependencies = [
  "pal_event",
  "parking_lot",
  "pci_core",
- "safeatomic",
  "sparse_mmap",
  "tdisp",
  "tracing",

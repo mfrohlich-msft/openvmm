@@ -9,7 +9,6 @@ rust-version.workspace = true
 [dependencies]
 inspect.workspace = true
 anyhow.workspace = true
-zerocopy.workspace = true
 hvdef.workspace = true
 tracing.workspace = true
 
