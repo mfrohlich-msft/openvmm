@@ -35,6 +35,10 @@ impl CpuIo for ChipsetPlusSynic {
         self.chipset.is_mmio(address)
     }
 
+    fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> bool {
+        self.chipset.tdisp_command_from_guest(command)
+    }
+
     fn acknowledge_pic_interrupt(&self) -> Option<u8> {
         self.chipset.acknowledge_pic_interrupt()
     }

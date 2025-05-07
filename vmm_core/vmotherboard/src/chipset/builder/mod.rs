@@ -27,8 +27,10 @@ use pal_async::task::Task;
 use state_unit::SpawnedUnit;
 use state_unit::StateUnits;
 use state_unit::UnitHandle;
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Weak;
 use vmcore::line_interrupt::LineSetTarget;
 use vmcore::vm_task::VmTaskDriverSource;
@@ -99,6 +101,7 @@ impl<'a> ChipsetBuilder<'a> {
             vm_chipset: Chipset {
                 mmio_ranges: IoRanges::new(trace_unknown_mmio, fallback_mmio_device),
                 pio_ranges: IoRanges::new(trace_unknown_pio, None),
+                tdisp_devices: Arc::new(Mutex::new(HashMap::new())),
 
                 pic: None,
                 eoi_handler: None,

@@ -57,6 +57,10 @@ impl CpuIo for MockCpu {
         todo!()
     }
 
+    fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> bool {
+        todo!()
+    }
+
     fn handle_eoi(&self, _irq: u32) {
         todo!()
     }

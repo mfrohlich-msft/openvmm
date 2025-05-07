@@ -20,8 +20,10 @@ use chipset_device::io::IoResult;
 use closeable_mutex::CloseableMutex;
 use cvm_tracing::CVM_CONFIDENTIAL;
 use inspect::Inspect;
+use std::collections::HashMap;
 use std::future::poll_fn;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 /// The "glue" that interconnects virtual devices, and exposes an API for
 /// external entities (such as VCPUs) to access devices.
@@ -31,6 +33,10 @@ pub struct Chipset {
     mmio_ranges: IoRanges<u64>,
     #[inspect(rename = "pio")]
     pio_ranges: IoRanges<u16>,
+
+    // [TDISP TODO] Inspect.
+    #[inspect(skip)]
+    tdisp_devices: Arc<Mutex<HashMap<u64, Arc<dyn tdisp::TdispHostDeviceTarget>>>>,
 
     #[inspect(rename = "has_pic", with = "Option::is_some")]
     pic: Option<Arc<CloseableMutex<dyn ChipsetDevice>>>,
@@ -214,6 +220,23 @@ impl Chipset {
     /// Check if a MMIO device exists at the given address
     pub fn is_mmio(&self, addr: u64) -> bool {
         self.mmio_ranges.is_occupied(addr)
+    }
+
+    /// Dispatch a TDISP command based on the device ID to the registered receiver.
+    pub fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> bool {
+        // Find the TDISP device for this device ID.
+        let device_id = command.device_id;
+        let tdisp_mapping = self.tdisp_devices.lock().unwrap();
+        let tdisp_device = tdisp_mapping.get(&device_id);
+        if let Some(tdisp_device) = tdisp_device {
+            tdisp_device.tdisp_handle_guest_command(command).is_ok()
+        } else {
+            tracing::error!(
+                "tdisp_command_from_guest: No TDISP device found for device ID 0x{:x}",
+                device_id
+            );
+            false
+        }
     }
 
     /// Dispatch a Port IO read to the given address.

@@ -30,6 +30,7 @@ use guid::Guid;
 use inspect::Inspect;
 use inspect::InspectMut;
 use parking_lot::Mutex;
+use pci_core::RegisterTdisp;
 use pci_core::capabilities::msix::MsixEmulator;
 use pci_core::cfg_space_emu::BarMemoryKind;
 use pci_core::cfg_space_emu::ConfigSpaceType0Emulator;
@@ -41,6 +42,7 @@ use pci_core::spec::hwid::ProgrammingInterface;
 use pci_core::spec::hwid::Subclass;
 use std::sync::Arc;
 use tdisp::TdispHostDeviceTarget;
+use tdisp::TdispHostDeviceTargetEmulator;
 use vmcore::device_state::ChangeDeviceState;
 use vmcore::save_restore::SaveError;
 use vmcore::save_restore::SaveRestore;
@@ -59,6 +61,9 @@ pub struct NvmeController {
     qe_sizes: Arc<Mutex<IoQueueEntrySizes>>,
     #[inspect(flatten, mut)]
     workers: NvmeWorkers,
+
+    #[inspect(skip)]
+    tdisp_emulator: Arc<TdispHostDeviceTargetEmulator>,
 }
 
 #[derive(Inspect)]
@@ -113,7 +118,7 @@ impl NvmeController {
         guest_memory: GuestMemory,
         register_msi: &mut dyn RegisterMsi,
         register_mmio: &mut dyn RegisterMmioIntercept,
-        tdisp_host_device_target: Option<Arc<dyn TdispHostDeviceTarget>>,
+        register_tdisp: &mut dyn RegisterTdisp,
         caps: NvmeControllerCaps,
     ) -> Self {
         let (msix, msix_cap) = MsixEmulator::new(4, caps.msix_count, register_msi);
@@ -157,12 +162,10 @@ impl NvmeController {
             caps.subsystem_id,
         );
 
-        if let Some(tdisp_host_device_target) = tdisp_host_device_target {
-            tdisp_host_device_target.tdisp_add_command_callback(Box::new(|x| {
-                tracing::error!("tdisp command not supported: {:?}", x);
-                Ok(())
-            }));
-        }
+        let tdisp_emulator = Arc::new(TdispHostDeviceTargetEmulator::new());
+
+        // TDISP TODO: don't need to always register for tdisp
+        register_tdisp.register(tdisp_emulator.clone());
 
         Self {
             cfg_space,
@@ -170,6 +173,7 @@ impl NvmeController {
             registers: RegState::new(),
             workers: admin,
             qe_sizes,
+            tdisp_emulator,
         }
     }
 
@@ -436,9 +440,11 @@ impl ChangeDeviceState for NvmeController {
             registers,
             qe_sizes,
             workers,
+            tdisp_emulator,
         } = self;
         workers.reset().await;
         cfg_space.reset();
+        tdisp_emulator.reset();
         *registers = RegState::new();
         *qe_sizes.lock() = Default::default();
     }

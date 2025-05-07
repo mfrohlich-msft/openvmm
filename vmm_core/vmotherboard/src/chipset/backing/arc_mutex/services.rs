@@ -13,8 +13,11 @@ use crate::chipset::line_sets::LineSetTargetDevice;
 use chipset_device::ChipsetDevice;
 use chipset_device_resources::LineSetId;
 use closeable_mutex::CloseableMutex;
+use pci_core::RegisterTdisp;
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Weak;
 use thiserror::Error;
 use vmcore::line_interrupt::LineInterrupt;
@@ -129,6 +132,20 @@ impl<T: VmmChipsetDevice> ArcMutexChipsetServicesFinalize<T> for ArcMutexChipset
     }
 }
 
+pub struct ArcMutexChipsetTdispRegistration {
+    /// References to map in chipset_builder
+    device_map: Arc<Mutex<HashMap<u64, Arc<dyn tdisp::TdispHostDeviceTarget>>>>,
+    /// HV Device id of the device to register
+    device_id: u64,
+}
+
+impl RegisterTdisp for ArcMutexChipsetTdispRegistration {
+    fn register(&mut self, target: Arc<dyn tdisp::TdispHostDeviceTarget>) {
+        let mut device_map = self.device_map.lock().unwrap();
+        device_map.insert(self.device_id, target);
+    }
+}
+
 impl<'a, 'b> ArcMutexChipsetServices<'a, 'b> {
     pub fn new(
         builder: &'a mut ChipsetBuilder<'b>,
@@ -168,6 +185,16 @@ impl<'a, 'b> ArcMutexChipsetServices<'a, 'b> {
             dev: self.dev.clone(),
             dev_name: self.dev_name.clone(),
             ranges: self.builder.vm_chipset.pio_ranges.clone(),
+        }
+    }
+
+    pub fn register_tdisp_host_device(
+        &mut self,
+        device_id: u64,
+    ) -> ArcMutexChipsetTdispRegistration {
+        ArcMutexChipsetTdispRegistration {
+            device_map: self.builder.vm_chipset.tdisp_devices.clone(),
+            device_id,
         }
     }
 

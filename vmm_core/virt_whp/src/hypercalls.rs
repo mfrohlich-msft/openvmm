@@ -1030,10 +1030,10 @@ mod x86 {
             &mut self,
             command: hvdef::hypercall::TdispGuestToHostCommand,
         ) -> HvResult<()> {
-            self.vp
-                .current_vtlp()
-                .software_devices
-                .tdisp_command_from_guest(command.into())
+            self.bus.tdisp_command_from_guest(command.into());
+
+            // [TDISP TODO] Handle errors and return values.
+            Ok(())
         }
     }
 

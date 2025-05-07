@@ -6,7 +6,7 @@
 //! A collection of constants, types, and traits that are shared across all PCI
 //! implementations (i.e: vpci, pci_gen1, pcie).
 
-#![forbid(unsafe_code)]
+use std::sync::Arc;
 
 pub mod test_helpers;
 
@@ -25,4 +25,11 @@ pub enum PciInterruptPin {
     IntB,
     IntC,
     IntD,
+}
+
+/// Trait for registering TDISP devices.
+/// [TDISP TODO] Move out of here.
+pub trait RegisterTdisp: Send {
+    /// Registers a TDISP capable device on the host.
+    fn register(&mut self, target: Arc<dyn tdisp::TdispHostDeviceTarget>);
 }

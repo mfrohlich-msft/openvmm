@@ -11,9 +11,9 @@ use chipset_device_resources::ResolvedChipsetDevice;
 use guestmem::DoorbellRegistration;
 use guestmem::GuestMemory;
 use guestmem::MemoryMapper;
+use pci_core::RegisterTdisp;
 use pci_core::msi::RegisterMsi;
 use std::sync::Arc;
-use tdisp::TdispHostDeviceTarget;
 use vm_resource::CanResolveTo;
 use vm_resource::kind::PciDeviceHandleKind;
 use vmcore::vm_task::VmTaskDriverSource;
@@ -37,6 +37,8 @@ pub struct ResolvePciDeviceHandleParams<'a> {
     pub register_msi: &'a mut dyn RegisterMsi,
     /// An object with which to register MMIO regions.
     pub register_mmio: &'a mut (dyn RegisterMmioIntercept + Send),
+    /// An object with which to register to receive TDISP commands from the guest.
+    pub register_tdisp: &'a mut dyn RegisterTdisp,
     /// The VM's task driver source.
     pub driver_source: &'a VmTaskDriverSource,
     /// The VM's guest memory.
@@ -45,6 +47,4 @@ pub struct ResolvePciDeviceHandleParams<'a> {
     pub doorbell_registration: Option<Arc<dyn DoorbellRegistration>>,
     /// An object with which to register shared memory regions.
     pub shared_mem_mapper: Option<&'a dyn MemoryMapper>,
-    /// An object with which to register to receive TDISP commands from the guest.
-    pub tdisp_host_device_target: Option<Arc<dyn TdispHostDeviceTarget>>,
 }

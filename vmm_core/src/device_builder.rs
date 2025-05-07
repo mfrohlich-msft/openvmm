@@ -36,7 +36,6 @@ pub async fn build_vpci_device(
     ) -> anyhow::Result<(
         Arc<dyn MsiInterruptTarget>,
         Arc<dyn VpciInterruptMapper>,
-        Arc<dyn TdispHostDeviceTarget>,
     )>,
 ) -> anyhow::Result<()> {
     let device_name = format!("{}:vpci-{instance_id}", resource.id());
@@ -45,7 +44,7 @@ pub async fn build_vpci_device(
     let device_id = (instance_id.data2 as u64) << 16 | (instance_id.data3 as u64 & 0xfff8);
 
     // [TDISP TODO] Not all devices support TDISP, so we need to check this and not create a host device target if it's not supported.
-    let (msi_controller, interrupt_mapper, tdisp_host_device_target) =
+    let (msi_controller, interrupt_mapper) =
         new_virtual_device(device_id).context("failed to create virtual device")?;
 
     let device = {
@@ -59,7 +58,7 @@ pub async fn build_vpci_device(
                         pci_resources::ResolvePciDeviceHandleParams {
                             register_msi: &mut msi_set,
                             register_mmio: &mut services.register_mmio(),
-                            tdisp_host_device_target: Some(tdisp_host_device_target.clone()),
+                            register_tdisp: &mut services.register_tdisp_host_device(device_id),
                             driver_source,
                             guest_memory,
                             doorbell_registration,

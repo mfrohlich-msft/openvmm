@@ -281,7 +281,7 @@ impl<T: DeviceBacking> NvmeDriver<T> {
         if let Some(client) = worker.device.tdisp_client() {
             client.tdisp_command_to_host(tdisp::GuestToHostCommand {
                 device_id: 0,
-                command_id: 0x12345678,
+                command_id: 12345,
             })?;
         }
 

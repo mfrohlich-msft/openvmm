@@ -530,6 +530,7 @@ version = "0.0.0"
 dependencies = [
  "inspect",
  "mesh",
+ "tdisp",
 ]
 
 [[package]]
@@ -4633,6 +4634,7 @@ dependencies = [
 name = "nvme"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chipset_device",
  "device_emulators",
@@ -5361,6 +5363,7 @@ dependencies = [
  "mesh",
  "open_enum",
  "parking_lot",
+ "tdisp",
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",
@@ -8110,6 +8113,7 @@ dependencies = [
  "hvdef",
  "iced-x86",
  "pal_async",
+ "tdisp",
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",
@@ -8972,8 +8976,10 @@ dependencies = [
  "parking_lot",
  "paste",
  "pci_bus",
+ "pci_core",
  "range_map_vec",
  "state_unit",
+ "tdisp",
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",

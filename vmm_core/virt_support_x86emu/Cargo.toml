@@ -19,6 +19,9 @@ thiserror.workspace = true
 tracing.workspace = true
 zerocopy.workspace = true
 
+# TDISP TODO: TDISP
+tdisp.workspace = true
+
 [dev-dependencies]
 pal_async.workspace = true
 iced-x86 = { workspace = true, features = ["code_asm"] }

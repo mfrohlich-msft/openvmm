@@ -153,20 +153,6 @@ impl MapVpciInterrupt for Device {
     }
 }
 
-impl TdispHostDeviceTarget for Device {
-    fn tdisp_add_command_callback(&self, _callback: Box<tdisp::TdispCommandCallback>) {
-        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_add_command_callback");
-    }
-
-    fn tdisp_handle_guest_command(
-        &mut self,
-        _command: tdisp::GuestToHostCommand,
-    ) -> anyhow::Result<()> {
-        tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_handle_guest_command");
-        Ok(())
-    }
-}
-
 fn probe_power_register(device: &whp::Device<'_>) -> Option<u32> {
     let read = |offset| {
         let mut data = [0; 4];

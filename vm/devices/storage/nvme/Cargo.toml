@@ -20,6 +20,8 @@ pci_resources.workspace = true
 chipset_device.workspace = true
 guestmem.workspace = true
 tdisp.workspace = true
+# TDISP TODO: anyhow dependency
+anyhow.workspace = true
 vmcore.workspace = true
 vm_resource.workspace = true
 

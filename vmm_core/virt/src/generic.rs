@@ -590,7 +590,7 @@ pub trait PartitionMemoryMapper {
 
 pub trait Hv1 {
     type Error: std::error::Error + Send + Sync + 'static;
-    type Device: MapVpciInterrupt + MsiInterruptTarget + TdispHostDeviceTarget;
+    type Device: MapVpciInterrupt + MsiInterruptTarget;
 
     fn reference_time_source(&self) -> Option<ReferenceTimeSource>;
 
@@ -621,19 +621,6 @@ impl MapVpciInterrupt for UnimplementedDevice {
 
 impl MsiInterruptTarget for UnimplementedDevice {
     fn new_interrupt(&self) -> Box<dyn pci_core::msi::MsiControl> {
-        match *self {}
-    }
-}
-
-impl TdispHostDeviceTarget for UnimplementedDevice {
-    fn tdisp_handle_guest_command(
-        &mut self,
-        _command: tdisp::GuestToHostCommand,
-    ) -> anyhow::Result<()> {
-        match *self {}
-    }
-
-    fn tdisp_add_command_callback(&self, _callback: Box<tdisp::TdispCommandCallback>) {
         match *self {}
     }
 }
