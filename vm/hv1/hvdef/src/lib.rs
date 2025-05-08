@@ -1581,6 +1581,15 @@ pub mod hypercall {
 
     #[repr(C)]
     #[derive(Copy, Clone, Debug, IntoBytes, Immutable, KnownLayout, FromBytes)]
+    pub struct TdispGuestToHostResponse {
+        pub command_id: u64,
+        pub result: u64,
+        pub tdi_state_before: u64,
+        pub tdi_state_after: u64,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, IntoBytes, Immutable, KnownLayout, FromBytes)]
     pub struct ModifyVtlProtectionMask {
         pub partition_id: u64,
         pub map_flags: HvMapGpaFlags,

@@ -10,6 +10,11 @@ use anyhow::Context;
 use inspect::Inspect;
 use tdisp::ClientDevice;
 use tdisp::GuestToHostCommand;
+<<<<<<< HEAD
+=======
+use tdisp::GuestToHostResponse;
+use tdisp::TdispCommandId;
+>>>>>>> 24065d9f (implement command id)
 
 /// Implements the `ClientDevice` trait for a VFIO device.
 pub struct TdispVfioClientDevice {
@@ -31,6 +36,21 @@ impl TdispVfioClientDevice {
             device_id,
         })
     }
+
+    /// Reads the response from the hypercall after it executed successfully.
+    fn read_response(&self, command: &GuestToHostCommand) -> anyhow::Result<GuestToHostResponse> {
+        let response: TdispGuestToHostResponse = self.response_buffer.read_obj(0);
+        let response_id: TdispCommandId = command.command_id.into();
+        if response_id != command.command_id {
+            return Err(anyhow::anyhow!(
+                "response command ID mismatch, expected {:?}, got {:?}",
+                command.command_id,
+                response.command_id
+            ));
+        }
+
+        Ok(response.into())
+    }
 }
 
 impl ClientDevice for TdispVfioClientDevice {
@@ -41,7 +61,21 @@ impl ClientDevice for TdispVfioClientDevice {
             .tdisp_dispatch(command)
             .context("failed to dispatch TDISP command")?;
 
-        Ok(())
+        // Response has now been written to the response buffer.
+        let resp = self.read_response(&command)?;
+
+        tracing::error!("tdisp_command_to_host: response = {:?}", &resp);
+
+        Ok(resp)
+    }
+
+    fn tdisp_command_no_args(&self, command_id: u64) -> anyhow::Result<GuestToHostResponse> {
+        self.tdisp_command_to_host(GuestToHostCommand {
+            // Filled in later.
+            response_gpa: 0,
+            device_id: 0,
+            command_id: command_id.into(),
+        })
     }
 }
 

@@ -9,57 +9,14 @@
 //! - Intel® "TDX Connect"
 //! - AMD SEV-TIO
 
+mod command;
+use command::*;
+pub use command::{GuestToHostCommand, GuestToHostResponse, TdispCommandId};
+use hvdef::hypercall::TdispGuestToHostResponse;
 use inspect::Inspect;
 use std::fmt::Display;
-use zerocopy::FromBytes;
-use zerocopy::Immutable;
-use zerocopy::IntoBytes;
-use zerocopy::KnownLayout;
-
-/// Represents a TDISP command sent from the guest to the host.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct GuestToHostCommand {
-    /// Device ID of the target device.
-    pub device_id: u64,
-
-    /// The command ID.
-    pub command_id: u64,
-}
-
-impl From<hvdef::hypercall::TdispGuestToHostCommand> for GuestToHostCommand {
-    fn from(value: hvdef::hypercall::TdispGuestToHostCommand) -> Self {
-        Self {
-            device_id: value.device_id,
-            command_id: value.command_id,
-        }
-    }
-}
-
-impl From<GuestToHostCommand> for hvdef::hypercall::TdispGuestToHostCommand {
-    fn from(value: GuestToHostCommand) -> Self {
-        Self {
-            device_id: value.device_id,
-            command_id: value.command_id,
-        }
-    }
-}
-
-/// Represents a TDISP device assigned to a guest partition. This trait allows
-/// the guest to send TDISP commands to the host through the backing hypercall
-/// interface.
-pub trait ClientDevice: Send + Sync + Inspect {
-    /// Send a TDISP command to the host through backing hypercall interface.
-    fn tdisp_command_to_host(&self, command: GuestToHostCommand) -> anyhow::Result<()>;
-}
-
-impl Display for GuestToHostCommand {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // Display the Debug representation of the command.
-        f.debug_struct("GuestToHostCommand")
-            .field("command_id", &self.command_id)
-            .finish()
-    }
-}
+use std::io::Error;
+use thiserror::Error;
 
 /// Callback for receiving TDISP commands from the guest.
 pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()> + Send + Sync;
@@ -74,11 +31,16 @@ pub trait TdispHostDeviceTarget: Send + Sync {
 }
 
 /// An emulator which runs the TDISP state machine for a synthetic device.
-pub struct TdispHostDeviceTargetEmulator {}
+pub struct TdispHostDeviceTargetEmulator {
+    machine: TdispHostStateMachine,
+}
 
 impl TdispHostDeviceTargetEmulator {
-    pub fn new() -> Self {
-        Self {}
+    /// Create a new emulator which runs the TDISP state machine for a synthetic device.
+    pub fn new(debug_device_id: &str) -> Self {
+        Self {
+            machine: TdispHostStateMachine::new(debug_device_id),
+        }
     }
 
     pub fn reset(&self) {}
@@ -90,7 +52,29 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
             "TdispHostDeviceTargetEmulator got a TDISP command: {:?}",
             command
         );
-        Ok(())
+
+        let mut error = TdispGuestOperationError::Success;
+        let state_before = self.machine.state();
+        match command.command_id {
+            TdispCommandId::GetDeviceInterfaceInfo
+            | TdispCommandId::Bind
+            | TdispCommandId::GetTdiReport
+            | TdispCommandId::StartTdi
+            | TdispCommandId::Unbind => {
+                error = TdispGuestOperationError::NotImplemented;
+            }
+            TdispCommandId::Unknown => {
+                error = TdispGuestOperationError::InvalidGuestCommandId;
+            }
+        }
+        let state_after = self.machine.state();
+
+        Ok(GuestToHostResponse {
+            command_id: command.command_id,
+            result: error,
+            tdi_state_before: state_before,
+            tdi_state_after: state_after,
+        })
     }
 }
 
@@ -201,6 +185,11 @@ impl TdispHostStateMachine {
         tracing::error!("[{}] {}", self.debug_device_id, msg);
     }
 
+    /// Get the current state of the TDI.
+    fn state(&self) -> TdispTdiState {
+        self.current_state
+    }
+
     /// Check if the state machine can transition to the new state. This protects the underlying state machinery
     /// while higher level transition machinery tries to avoid these conditions. If the new state is impossible,
     /// `false` is returned.
@@ -307,7 +296,53 @@ impl TdispHostStateMachine {
         self.debug_print("Recovering from Error state");
         self.unbind_all(TdispUnbindReason::RecoveringFromError);
     }
+}
 
+/// Error returned by TDISP operations dispatched by the guest.
+#[derive(Error, Debug, Copy, Clone)]
+#[expect(missing_docs)]
+pub enum TdispGuestOperationError {
+    #[error("the operation was successful")]
+    Success,
+    #[error("the current TDI state is incorrect for this operation")]
+    InvalidDeviceState,
+    #[error("the reason for this unbind is invalid")]
+    InvalidGuestUnbindReason,
+    #[error("invalid TDI command ID")]
+    InvalidGuestCommandId,
+    #[error("operation not implemented")]
+    NotImplemented,
+}
+
+impl From<TdispGuestOperationError> for u64 {
+    fn from(err: TdispGuestOperationError) -> Self {
+        match err {
+            TdispGuestOperationError::Success => 0,
+            TdispGuestOperationError::InvalidDeviceState => 1,
+            TdispGuestOperationError::InvalidGuestUnbindReason => 2,
+            TdispGuestOperationError::InvalidGuestCommandId => 3,
+            TdispGuestOperationError::NotImplemented => 4,
+        }
+    }
+}
+
+impl From<u64> for TdispGuestOperationError {
+    fn from(err: u64) -> Self {
+        match err {
+            0 => TdispGuestOperationError::Success,
+            1 => TdispGuestOperationError::InvalidDeviceState,
+            2 => TdispGuestOperationError::InvalidGuestUnbindReason,
+            3 => TdispGuestOperationError::InvalidGuestCommandId,
+            4 => TdispGuestOperationError::NotImplemented,
+            _ => panic!("invalid error code"),
+        }
+    }
+}
+
+/// Represents an interface by which guest commands can be dispatched to a
+/// backing TDISP state handler. This could be an emulated TDISP device or an
+/// assigned TDISP device that is actually connected to the guest.
+pub trait TdispGuestRequestInterface {
     /// Transition the device from the Unlocked to Locked state. This takes place after the
     /// device has been assigned to the guest partition and the resources for the device have
     /// been configured by the guest. The device will be in the `Locked` state until it has
@@ -315,20 +350,7 @@ impl TdispHostStateMachine {
     ///
     /// Attempting to transition the device to the `Locked` state while the device is not in the
     /// `Unlocked` state will unbind the device.
-    pub fn request_lock_device_resources(&mut self) {
-        // If the guest attempts to transition the device to the Locked state while the device
-        // is not in the Unlocked state, the device is reset to the Unlocked state.
-        if self.current_state != TdispTdiState::Unlocked {
-            self.error_print(
-                "Unlocked to Locked state called while device was not in Unlocked state.",
-            );
-            self.unbind_all(TdispUnbindReason::InvalidGuestTransitionToLocked);
-            return;
-        }
-
-        self.debug_print("Device transition from Unlocked to Locked state");
-        self.transition_state_to(TdispTdiState::Locked).unwrap();
-    }
+    fn request_lock_device_resources(&mut self) -> Result<(), TdispGuestOperationError>;
 
     /// Retrieves the attestation report for the device when the device is in the `Locked` state.
     /// The device will remain in the `Locked` state until the attestation report is validated by
@@ -336,29 +358,68 @@ impl TdispHostStateMachine {
     ///
     /// Attempting to retrieve the attestation report while the device is not in the `Locked` state
     /// will unbind the device.
-    pub fn request_retrieve_attestation_report(&mut self) {
+    fn request_retrieve_attestation_report(&mut self) -> Result<(), TdispGuestOperationError>;
+
+    /// Accepts the attestation report for the device when the device is in the `Locked` state.
+    /// The device will now transition to the `Run` state. The device will not be functional in the
+    /// guest until the resources are accepted into the guest context through the guest-to-firmware interface.
+    ///
+    /// Attempting to accept the attestation report while the device is not in the `Locked` state
+    /// will unbind the device.
+    fn request_accept_attestation_report(&mut self) -> Result<(), TdispGuestOperationError>;
+
+    /// Guest initiates a graceful unbind of the device. The guest might
+    /// initiate an unbind for a variety of reasons:
+    ///  - Device is being detached/deactivated and is no longer needed in a functional state
+    ///  - Device is powering down or entering a reset
+    ///  - TDISP state machine synchronization is torn and needs to be reset to recover it
+    ///  - Device entered the Error state and needs to be recovered
+    ///
+    /// The device will transition to the `Unlocked` state. The guest can call
+    /// this function at any time in any state to reset the device to the
+    /// `Unlocked` state.
+    fn request_unbind(&mut self, reason: TdispUnbindReason)
+    -> Result<(), TdispGuestOperationError>;
+}
+
+impl TdispGuestRequestInterface for TdispHostStateMachine {
+    fn request_lock_device_resources(&mut self) -> Result<(), TdispGuestOperationError> {
+        // If the guest attempts to transition the device to the Locked state while the device
+        // is not in the Unlocked state, the device is reset to the Unlocked state.
+        if self.current_state != TdispTdiState::Unlocked {
+            self.error_print(
+                "Unlocked to Locked state called while device was not in Unlocked state.",
+            );
+            self.unbind_all(TdispUnbindReason::InvalidGuestTransitionToLocked);
+            return Err(TdispGuestOperationError::InvalidDeviceState);
+        }
+
+        self.debug_print("Device transition from Unlocked to Locked state");
+        self.transition_state_to(TdispTdiState::Locked).unwrap();
+        Ok(())
+    }
+
+    fn request_retrieve_attestation_report(&mut self) -> Result<(), TdispGuestOperationError> {
         if self.current_state != TdispTdiState::Locked {
             self.error_print(
                 "Retrieve attestation report called while device was not in Locked state.",
             );
             self.unbind_all(TdispUnbindReason::InvalidGuestGetAttestationReportState);
-            return;
+            return Err(TdispGuestOperationError::InvalidDeviceState);
         }
 
         // [TDISP TODO] Implement the attestation report retrieval.
         self.debug_print("Retrieve attestation report called successfully");
+        Ok(())
     }
 
-    /// Accepts the attestation report for the device when the device is in the `Locked` state.
-    /// The device will now transition to the `Run` state. The device will not be functional in the
-    /// guest until the resources are accepted into the guest context through the guest-to-firmware interface.
-    pub fn request_accept_attestation_report(&mut self) {
+    fn request_accept_attestation_report(&mut self) -> Result<(), TdispGuestOperationError> {
         if self.current_state != TdispTdiState::Locked {
             self.error_print(
                 "Accept attestation report called while device was not in Locked state.",
             );
             self.unbind_all(TdispUnbindReason::InvalidGuestAcceptAttestationReportState);
-            return;
+            return Err(TdispGuestOperationError::InvalidDeviceState);
         }
 
         // The guest accepts the attestation report and the device transitions to the Run state.
@@ -366,12 +427,13 @@ impl TdispHostStateMachine {
             "Accept attestation report called successfully, device transitioning to Run state",
         );
         self.transition_state_to(TdispTdiState::Run).unwrap();
+        Ok(())
     }
 
-    /// Guest initiates a graceful unbind of the device. This is called when the guest is done
-    /// with the device and no longer needs it. The device will transition to the `Unlocked` state.
-    /// The guest can call this function at any time in any state to reset the device to the `Unlocked` state.
-    pub fn request_guest_unbind(&mut self, reason: TdispUnbindReason) {
+    fn request_unbind(
+        &mut self,
+        reason: TdispUnbindReason,
+    ) -> Result<(), TdispGuestOperationError> {
         // The guest can provide a reason for the unbind. If the unbind reason isn't valid for a guest (such as
         // if the guest says it is unbinding due to a host-related error), the reason is discarded and InvalidGuestUnbindReason
         // is recorded in the unbind history.
@@ -383,7 +445,7 @@ impl TdispHostStateMachine {
             self.unbind_all(TdispUnbindReason::InvalidGuestUnbindReason(
                 anyhow::anyhow!("Invalid guest unbind reason {:?} requested", reason),
             ));
-            return;
+            return Err(TdispGuestOperationError::InvalidGuestUnbindReason);
         }
 
         self.debug_print(&format!(
@@ -391,5 +453,6 @@ impl TdispHostStateMachine {
             self.current_state, reason
         ));
         self.unbind_all(reason);
+        Ok(())
     }
 }
