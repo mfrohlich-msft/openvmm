@@ -22,6 +22,7 @@ use inspect::Inspect;
 use mesh::payload::Protobuf;
 use mesh::rpc::Rpc;
 use mesh::rpc::RpcSend;
+use openhcl_tdisp_resources::TdispCommandId;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use save_restore::NvmeDriverWorkerSavedState;
@@ -279,10 +280,7 @@ impl<T: DeviceBacking> NvmeDriver<T> {
         let worker = task.task_mut();
 
         if let Some(client) = worker.device.tdisp_client() {
-            client.tdisp_command_to_host(tdisp::GuestToHostCommand {
-                device_id: 0,
-                command_id: 12345,
-            })?;
+            client.tdisp_command_no_args(TdispCommandId::Bind).unwrap();
         }
 
         // Request the admin queue pair be the same size to avoid potential

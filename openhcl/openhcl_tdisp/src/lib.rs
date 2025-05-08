@@ -10,11 +10,6 @@ use anyhow::Context;
 use inspect::Inspect;
 use tdisp::ClientDevice;
 use tdisp::GuestToHostCommand;
-<<<<<<< HEAD
-=======
-use tdisp::GuestToHostResponse;
-use tdisp::TdispCommandId;
->>>>>>> 24065d9f (implement command id)
 
 /// Implements the `ClientDevice` trait for a VFIO device.
 pub struct TdispVfioClientDevice {
@@ -69,12 +64,15 @@ impl ClientDevice for TdispVfioClientDevice {
         Ok(resp)
     }
 
-    fn tdisp_command_no_args(&self, command_id: u64) -> anyhow::Result<GuestToHostResponse> {
+    fn tdisp_command_no_args(
+        &self,
+        command_id: TdispCommandId,
+    ) -> anyhow::Result<GuestToHostResponse> {
         self.tdisp_command_to_host(GuestToHostCommand {
             // Filled in later.
             response_gpa: 0,
             device_id: 0,
-            command_id: command_id.into(),
+            command_id,
         })
     }
 }
