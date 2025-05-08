@@ -861,6 +861,7 @@ pub struct TimerMessagePayload {
 pub mod hypercall {
     use super::*;
     use core::ops::RangeInclusive;
+    use zerocopy::TryFromBytes;
     use zerocopy::Unalign;
 
     /// The hypercall input value.
@@ -1586,6 +1587,9 @@ pub mod hypercall {
         pub result: u64,
         pub tdi_state_before: u64,
         pub tdi_state_after: u64,
+
+        /// [TDISP TODO] This serializes into a TdispCommandResponsePayload
+        pub payload: [u8; 2048],
     }
 
     #[repr(C)]

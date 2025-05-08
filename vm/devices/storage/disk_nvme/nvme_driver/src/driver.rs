@@ -280,7 +280,9 @@ impl<T: DeviceBacking> NvmeDriver<T> {
         let worker = task.task_mut();
 
         if let Some(client) = worker.device.tdisp_client() {
-            client.tdisp_command_no_args(TdispCommandId::Bind).unwrap();
+            client
+                .tdisp_command_no_args(TdispCommandId::GetDeviceInterfaceInfo)
+                .unwrap();
         }
 
         // Request the admin queue pair be the same size to avoid potential

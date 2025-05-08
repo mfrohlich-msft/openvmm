@@ -6771,8 +6771,10 @@ dependencies = [
  "anyhow",
  "hvdef",
  "inspect",
+ "open_enum",
  "thiserror 2.0.12",
  "tracing",
+ "zerocopy 0.8.24",
 ]
 
 [[package]]

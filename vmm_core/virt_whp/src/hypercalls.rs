@@ -1035,6 +1035,41 @@ mod x86 {
             // [TDISP TODO] Handle errors and return values.
             Ok(())
         }
+
+        /// Write the response from a command to the guest.
+        fn tdisp_write_response_gpa(
+            &self,
+            response_gpa: u64,
+            response: hvdef::hypercall::TdispGuestToHostResponse,
+        ) -> HvResult<()> {
+            // Serialize response to bytes
+            let mut response_bytes = [0u8; size_of::<hvdef::hypercall::TdispGuestToHostResponse>()];
+            response.write_to(&mut response_bytes).unwrap();
+
+            tracing::trace!(
+                "tdisp_write_response_gpa: response_gpa = {:x}",
+                response_gpa
+            );
+
+            // Write response to guest memory
+            let res = self
+                .vp
+                .vp
+                .partition
+                .gm
+                .write_at(response_gpa, &response_bytes);
+
+            match res {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    tracelimit::warn_ratelimited!(
+                        "tdisp_write_response_gpa: failed to write response to guest memory: {:?}",
+                        e
+                    );
+                    Err(HvError::AccessDenied)
+                }
+            }
+        }
     }
 
     impl<T: CpuIo> hv1_hypercall::VtlReturn for WhpHypercallExit<'_, '_, T> {

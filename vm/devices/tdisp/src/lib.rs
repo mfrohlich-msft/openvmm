@@ -17,6 +17,13 @@ use inspect::Inspect;
 use std::fmt::Display;
 use std::io::Error;
 use thiserror::Error;
+use zerocopy::FromBytes;
+use zerocopy::Immutable;
+use zerocopy::IntoBytes;
+use zerocopy::KnownLayout;
+
+const TDISP_VERSION_MAJOR: u32 = 1;
+const TDISP_VERSION_MINOR: u32 = 0;
 
 /// Callback for receiving TDISP commands from the guest.
 pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()> + Send + Sync;
@@ -44,6 +51,15 @@ impl TdispHostDeviceTargetEmulator {
     }
 
     pub fn reset(&self) {}
+
+    /// Get the device interface info for this device.
+    fn get_device_interface_info(&self) -> TdispDeviceInterfaceInfo {
+        TdispDeviceInterfaceInfo {
+            interface_version_major: TDISP_VERSION_MAJOR,
+            interface_version_minor: TDISP_VERSION_MINOR,
+            supported_features: 0,
+        }
+    }
 }
 
 impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
@@ -54,10 +70,14 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
         );
 
         let mut error = TdispGuestOperationError::Success;
+        let mut payload = TdispCommandResponsePayload::None;
         let state_before = self.machine.state();
         match command.command_id {
-            TdispCommandId::GetDeviceInterfaceInfo
-            | TdispCommandId::Bind
+            TdispCommandId::GetDeviceInterfaceInfo => {
+                let interface_info = self.get_device_interface_info();
+                payload = TdispCommandResponsePayload::GetDeviceInterfaceInfo(interface_info);
+            }
+            TdispCommandId::Bind
             | TdispCommandId::GetTdiReport
             | TdispCommandId::StartTdi
             | TdispCommandId::Unbind => {
@@ -74,6 +94,7 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
             result: error,
             tdi_state_before: state_before,
             tdi_state_after: state_after,
+            payload,
         })
     }
 }
@@ -89,7 +110,7 @@ pub trait TdispClientDevice: Send + Sync {
 /// Represents the state of the TDISP host device emulator.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Inspect)]
 pub enum TdispTdiState {
-    /// The TDISP host device emulator is not initialized.
+    /// The TDISP state is not initialized or indeterminate.
     Uninitialized,
 
     /// `TDI.Unlocked`` - The device is in its default "reset" state. Resources can be configured
