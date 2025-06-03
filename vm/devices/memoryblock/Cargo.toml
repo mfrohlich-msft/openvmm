@@ -1,0 +1,14 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+[package]
+name = "memoryblock"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zerocopy.workspace = true
+safeatomic.workspace = true
+
+[lints]
+workspace = true

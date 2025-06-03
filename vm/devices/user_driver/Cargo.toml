@@ -21,12 +21,16 @@ uevent.workspace = true
 event-listener.workspace = true
 guestmem.workspace = true
 vmcore.workspace = true
+openhcl_tdisp_resources.workspace = true
+safeatomic.workspace = true
+memoryblock.workspace = true
 
 anyhow.workspace = true
 parking_lot.workspace = true
 tracing.workspace = true
 vfio-bindings.workspace = true
 zerocopy.workspace = true
+
 [target.'cfg(target_os = "linux")'.dependencies]
 fs-err.workspace = true
 futures.workspace = true
@@ -35,7 +39,6 @@ libc.workspace = true
 pal_event.workspace = true
 sparse_mmap = { workspace = true, optional = true }
 vfio_sys = { workspace = true, optional = true }
-tdisp.workspace = true
 
 [lints]
 workspace = true

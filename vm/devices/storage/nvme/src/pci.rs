@@ -29,8 +29,9 @@ use guestmem::GuestMemory;
 use guid::Guid;
 use inspect::Inspect;
 use inspect::InspectMut;
+use openhcl_tdisp_resources::RegisterTdisp;
+use pal_async::driver;
 use parking_lot::Mutex;
-use pci_core::RegisterTdisp;
 use pci_core::capabilities::msix::MsixEmulator;
 use pci_core::cfg_space_emu::BarMemoryKind;
 use pci_core::cfg_space_emu::ConfigSpaceType0Emulator;
@@ -162,7 +163,7 @@ impl NvmeController {
             caps.subsystem_id,
         );
 
-        let tdisp_emulator = Arc::new(TdispHostDeviceTargetEmulator::new());
+        let tdisp_emulator = Arc::new(TdispHostDeviceTargetEmulator::new("nvme"));
 
         // TDISP TODO: don't need to always register for tdisp
         register_tdisp.register(tdisp_emulator.clone());

@@ -1576,6 +1576,7 @@ pub mod hypercall {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, IntoBytes, Immutable, KnownLayout, FromBytes)]
     pub struct TdispGuestToHostCommand {
+        pub response_gpa: u64,
         pub device_id: u64,
         pub command_id: u64,
     }

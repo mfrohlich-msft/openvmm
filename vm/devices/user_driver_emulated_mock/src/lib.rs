@@ -16,6 +16,7 @@ use guestmem::GuestMemory;
 use inspect::Inspect;
 use inspect::InspectMut;
 use memory_range::MemoryRange;
+use openhcl_tdisp_resources::ClientDevice;
 use page_pool_alloc::PagePool;
 use page_pool_alloc::PagePoolAllocator;
 use page_pool_alloc::TestMapper;
@@ -174,7 +175,7 @@ impl<T: 'static + Send + InspectMut + MmioIntercept, U: 'static + Send + DmaClie
             .new_target())
     }
 
-    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>> {
+    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>> {
         None
     }
 }

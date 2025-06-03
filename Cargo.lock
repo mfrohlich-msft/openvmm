@@ -2230,6 +2230,7 @@ dependencies = [
  "nvme",
  "nvme_driver",
  "nvme_spec",
+ "openhcl_tdisp_resources",
  "page_pool_alloc",
  "pal_async",
  "parking_lot",
@@ -3993,6 +3994,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoryblock"
+version = "0.0.0"
+dependencies = [
+ "safeatomic",
+ "zerocopy 0.8.24",
+]
+
+[[package]]
 name = "mesh"
 version = "0.0.0"
 dependencies = [
@@ -4646,6 +4655,7 @@ dependencies = [
  "nvme_common",
  "nvme_resources",
  "nvme_spec",
+ "openhcl_tdisp_resources",
  "pal_async",
  "parking_lot",
  "pci_core",
@@ -4688,6 +4698,7 @@ dependencies = [
  "mesh",
  "nvme",
  "nvme_spec",
+ "openhcl_tdisp_resources",
  "pal_async",
  "parking_lot",
  "pci_core",
@@ -4863,8 +4874,6 @@ dependencies = [
  "hcl",
  "hvdef",
  "inspect",
-<<<<<<< HEAD
-=======
  "memoryblock",
  "openhcl_tdisp_resources",
  "tdisp",
@@ -4877,7 +4886,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "inspect",
->>>>>>> 0b1a23c2 (rules)
  "tdisp",
 ]
 
@@ -5389,6 +5397,7 @@ dependencies = [
  "chipset_device",
  "chipset_device_resources",
  "guestmem",
+ "openhcl_tdisp_resources",
  "pci_core",
  "vm_resource",
  "vmcore",
@@ -7760,13 +7769,15 @@ dependencies = [
  "inspect",
  "inspect_counters",
  "libc",
+ "memoryblock",
  "mesh",
+ "openhcl_tdisp_resources",
  "pal_async",
  "pal_event",
  "parking_lot",
  "pci_core",
+ "safeatomic",
  "sparse_mmap",
- "tdisp",
  "tracing",
  "uevent",
  "vfio-bindings",
@@ -7784,6 +7795,7 @@ dependencies = [
  "guestmem",
  "inspect",
  "memory_range",
+ "openhcl_tdisp_resources",
  "page_pool_alloc",
  "parking_lot",
  "pci_core",
@@ -8982,6 +8994,7 @@ dependencies = [
  "local_clock",
  "mesh",
  "missing_dev",
+ "openhcl_tdisp_resources",
  "pal_async",
  "parking_lot",
  "paste",

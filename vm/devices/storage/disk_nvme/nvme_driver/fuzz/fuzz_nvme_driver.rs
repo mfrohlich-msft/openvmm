@@ -14,6 +14,7 @@ use nvme::NvmeControllerCaps;
 use nvme_driver::Namespace;
 use nvme_driver::NvmeDriver;
 use nvme_spec::nvm::DsmRange;
+use openhcl_tdisp_resources::TestTdispRegisterNoOp;
 use page_pool_alloc::PagePoolAllocator;
 use pal_async::DefaultDriver;
 use pci_core::msi::MsiInterruptSet;
@@ -51,6 +52,7 @@ impl FuzzNvmeDriver {
             mem.guest_memory().clone(),
             &mut msi_set,
             &mut ExternallyManagedMmioIntercepts,
+            &mut TestTdispRegisterNoOp {},
             NvmeControllerCaps {
                 msix_count: 2,     // TODO: [use-arbitrary-input]
                 max_io_queues: 64, // TODO: [use-arbitrary-input]

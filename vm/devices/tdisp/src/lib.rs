@@ -31,9 +31,12 @@ pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()
 /// Trait added to host VPCI devices to allow them to dispatch TDISP commands from guests.
 pub trait TdispHostDeviceTarget: Send + Sync {
     /// [TDISP TODO] Highly subject to change as we work out the traits and semantics.
-    fn tdisp_handle_guest_command(&self, _command: GuestToHostCommand) -> anyhow::Result<()> {
+    fn tdisp_handle_guest_command(
+        &self,
+        _command: GuestToHostCommand,
+    ) -> Result<GuestToHostResponse, String> {
         tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_dispatch");
-        Ok(())
+        Err("TdispHostDeviceTarget not implemented: tdisp_dispatch".into())
     }
 }
 
@@ -46,7 +49,7 @@ impl TdispHostDeviceTargetEmulator {
     /// Create a new emulator which runs the TDISP state machine for a synthetic device.
     pub fn new(debug_device_id: &str) -> Self {
         Self {
-            machine: TdispHostStateMachine::new(debug_device_id),
+            machine: TdispHostStateMachine::new(debug_device_id.to_owned()),
         }
     }
 
@@ -63,7 +66,10 @@ impl TdispHostDeviceTargetEmulator {
 }
 
 impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
-    fn tdisp_handle_guest_command(&self, command: GuestToHostCommand) -> anyhow::Result<()> {
+    fn tdisp_handle_guest_command(
+        &self,
+        command: GuestToHostCommand,
+    ) -> Result<GuestToHostResponse, String> {
         tracing::warn!(
             "TdispHostDeviceTargetEmulator got a TDISP command: {:?}",
             command

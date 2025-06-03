@@ -10,6 +10,7 @@
 use inspect::Inspect;
 use interrupt::DeviceInterrupt;
 use memory::MemoryBlock;
+use openhcl_tdisp_resources::ClientDevice;
 use std::sync::Arc;
 
 pub mod backoff;
@@ -47,7 +48,7 @@ pub trait DeviceBacking: 'static + Send + Inspect {
 
     /// If this device is a TDISP-capable assigned device, return the TDISP client interface. If
     /// this is not a TDISP device, returns None.
-    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>>;
+    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>>;
 }
 
 /// Access to device registers.

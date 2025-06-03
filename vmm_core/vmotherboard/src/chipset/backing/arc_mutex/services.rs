@@ -13,7 +13,7 @@ use crate::chipset::line_sets::LineSetTargetDevice;
 use chipset_device::ChipsetDevice;
 use chipset_device_resources::LineSetId;
 use closeable_mutex::CloseableMutex;
-use pci_core::RegisterTdisp;
+use openhcl_tdisp_resources::RegisterTdisp;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;

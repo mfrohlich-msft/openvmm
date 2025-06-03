@@ -1030,7 +1030,17 @@ mod x86 {
             &mut self,
             command: hvdef::hypercall::TdispGuestToHostCommand,
         ) -> HvResult<()> {
-            self.bus.tdisp_command_from_guest(command.into());
+            let response = self.bus.tdisp_command_from_guest(command.into());
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    tracing::error!("TDISP command failed with error: {:?}", err);
+                    return Err(HvError::OperationFailed);
+                }
+            };
+
+            // Write response to guest memory
+            self.tdisp_write_response_gpa(command.response_gpa, response.into())?;
 
             // [TDISP TODO] Handle errors and return values.
             Ok(())

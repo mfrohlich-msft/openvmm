@@ -21,7 +21,10 @@ pub trait CpuIo {
     fn handle_eoi(&self, irq: u32);
 
     /// Handle a TDISP command from the guest.
-    fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> bool;
+    fn tdisp_command_from_guest(
+        &self,
+        command: tdisp::GuestToHostCommand,
+    ) -> Result<tdisp::GuestToHostResponse, String>;
 
     /// Signal a synic event.
     fn signal_synic_event(&self, vtl: Vtl, connection_id: u32, flag: u16) -> hvdef::HvResult<()>;

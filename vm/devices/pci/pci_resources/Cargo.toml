@@ -13,6 +13,7 @@ pci_core.workspace = true
 guestmem.workspace = true
 vmcore.workspace = true
 vm_resource.workspace = true
+openhcl_tdisp_resources.workspace = true
 
 [lints]
 workspace = true

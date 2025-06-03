@@ -11,12 +11,15 @@ use inspect::InspectMut;
 use nvme::NvmeControllerCaps;
 use nvme_spec::Cap;
 use nvme_spec::nvm::DsmRange;
+use openhcl_tdisp_resources::ClientDevice;
+use openhcl_tdisp_resources::TestTdispRegisterNoOp;
 use pal_async::DefaultDriver;
 use pal_async::async_test;
 use parking_lot::Mutex;
 use pci_core::msi::MsiInterruptSet;
 use scsi_buffers::OwnedRequestBuffers;
 use std::sync::Arc;
+use tdisp::TdispHostDeviceTargetEmulator;
 use test_with_tracing::test;
 use user_driver::DeviceBacking;
 use user_driver::DeviceRegisterIo;
@@ -64,6 +67,7 @@ async fn test_nvme_ioqueue_max_mqes(driver: DefaultDriver) {
         guest_mem,
         &mut msi_set,
         &mut ExternallyManagedMmioIntercepts,
+        &mut TestTdispRegisterNoOp {},
         NvmeControllerCaps {
             msix_count: MSIX_COUNT,
             max_io_queues: IO_QUEUE_COUNT,
@@ -101,6 +105,7 @@ async fn test_nvme_ioqueue_invalid_mqes(driver: DefaultDriver) {
         guest_mem,
         &mut msi_set,
         &mut ExternallyManagedMmioIntercepts,
+        &mut TestTdispRegisterNoOp {},
         NvmeControllerCaps {
             msix_count: MSIX_COUNT,
             max_io_queues: IO_QUEUE_COUNT,
@@ -138,6 +143,7 @@ async fn test_nvme_driver(driver: DefaultDriver, allow_dma: bool) {
         guest_mem.clone(),
         &mut msi_set,
         &mut ExternallyManagedMmioIntercepts,
+        &mut TestTdispRegisterNoOp {},
         NvmeControllerCaps {
             msix_count: MSIX_COUNT,
             max_io_queues: IO_QUEUE_COUNT,
@@ -251,6 +257,7 @@ async fn test_nvme_save_restore_inner(driver: DefaultDriver) {
         guest_mem.clone(),
         &mut msi_x,
         &mut ExternallyManagedMmioIntercepts,
+        &mut TestTdispRegisterNoOp {},
         NvmeControllerCaps {
             msix_count: MSIX_COUNT,
             max_io_queues: IO_QUEUE_COUNT,
@@ -283,6 +290,7 @@ async fn test_nvme_save_restore_inner(driver: DefaultDriver) {
         guest_mem.clone(),
         &mut new_msi_x,
         &mut ExternallyManagedMmioIntercepts,
+        &mut TestTdispRegisterNoOp {},
         NvmeControllerCaps {
             msix_count: MSIX_COUNT,
             max_io_queues: IO_QUEUE_COUNT,
@@ -374,7 +382,7 @@ impl<T: 'static + Send + InspectMut + MmioIntercept, U: 'static + DmaClient> Dev
         self.device.map_interrupt(msix, _cpu)
     }
 
-    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>> {
+    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>> {
         None
     }
 }

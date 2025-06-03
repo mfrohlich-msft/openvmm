@@ -30,6 +30,7 @@ use std::collections::hash_map;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::Instrument;
+use user_driver::DmaClient;
 use user_driver::vfio::VfioDevice;
 use vm_resource::AsyncResolveResource;
 use vm_resource::ResourceId;
@@ -249,17 +250,6 @@ impl NvmeManagerWorker {
             match req {
                 Request::Inspect(deferred) => deferred.inspect(&self),
                 Request::ForceLoadDriver(update) => {
-<<<<<<< HEAD
-                    match self.get_driver(update.new_value().to_owned()).await {
-                        Ok(_) => {
-                            let pci_id = update.new_value().to_string();
-                            update.succeed(pci_id);
-                        }
-                        Err(err) => {
-                            update.fail(err);
-                        }
-                    }
-=======
                     // [TDISP TODO] This doesn't work without a device_id field. This can be
                     // inferred from the pci_id...
 
@@ -272,7 +262,6 @@ impl NvmeManagerWorker {
                     //         update.fail(err);
                     //     }
                     // }
->>>>>>> 9a16bee6 (Finally routed hypercall from nvme usermode to nvme host)
                 }
                 Request::GetNamespace(rpc) => {
                     rpc.handle(async |(pci_id, nsid, device_id)| {
@@ -345,13 +334,16 @@ impl NvmeManagerWorker {
                     })
                     .map_err(InnerError::DmaClient)?;
 
+                // [TDISP TODO] Better management of this buffer.
+                let response_buffer = dma_client.allocate_dma_buffer(0x1000).unwrap();
+
                 let mut device = VfioDevice::new(&self.driver_source, entry.key(), dma_client)
                     .instrument(tracing::info_span!("vfio_device_open", pci_id))
                     .await
                     .map_err(InnerError::Vfio)?;
 
                 let tdisp_interface = Arc::new(
-                    TdispVfioClientDevice::new(device_id)
+                    TdispVfioClientDevice::new(device_id, response_buffer)
                         .context("failed to create tdisp client")
                         .map_err(InnerError::TdispClient)?,
                 );

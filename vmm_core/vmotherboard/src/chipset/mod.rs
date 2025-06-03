@@ -223,19 +223,25 @@ impl Chipset {
     }
 
     /// Dispatch a TDISP command based on the device ID to the registered receiver.
-    pub fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> bool {
+    pub fn tdisp_command_from_guest(
+        &self,
+        command: tdisp::GuestToHostCommand,
+    ) -> Result<tdisp::GuestToHostResponse, String> {
         // Find the TDISP device for this device ID.
         let device_id = command.device_id;
         let tdisp_mapping = self.tdisp_devices.lock().unwrap();
         let tdisp_device = tdisp_mapping.get(&device_id);
         if let Some(tdisp_device) = tdisp_device {
-            tdisp_device.tdisp_handle_guest_command(command).is_ok()
+            tdisp_device.tdisp_handle_guest_command(command)
         } else {
             tracing::error!(
                 "tdisp_command_from_guest: No TDISP device found for device ID 0x{:x}",
                 device_id
             );
-            false
+            Err(format!(
+                "No TDISP device found for device ID 0x{:x}",
+                device_id
+            ))
         }
     }
 

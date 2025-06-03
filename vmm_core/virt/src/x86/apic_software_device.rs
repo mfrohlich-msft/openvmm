@@ -130,35 +130,6 @@ impl ApicSoftwareDevices {
 
         Ok(())
     }
-
-    // /// Delivers a TDISP command sent from the guest to the host to the
-    // /// backing device.
-    // pub fn tdisp_command_from_guest(&self, command: tdisp::GuestToHostCommand) -> HvResult<()> {
-    //     let device = self
-    //         .inner
-    //         .device_table
-    //         .lock()
-    //         .get(&command.device_id)
-    //         .cloned()
-    //         .ok_or(HvError::InvalidDeviceId)?;
-
-    //     tracing::debug!("tdisp_command_from_guest: {:?} found device!", command);
-
-    //     // [TDISP TODO] Do something to not type erase the error?
-    //     let res = device.lock().tdisp_handle_guest_command(command);
-
-    //     if let Err(err) = res {
-    //         tracing::error!(
-    //             "tdisp_command_from_guest: {:?} failed to dispatch command: {:?}",
-    //             command,
-    //             err
-    //         );
-
-    //         return Err(HvError::InvalidHypercallInput);
-    //     }
-
-    //     Ok(())
-    // }
 }
 
 /// The software implementation of a VPCI-compatible device.
@@ -174,16 +145,6 @@ impl Drop for ApicSoftwareDevice {
         let _table = self.devices.tables.lock().remove(&self.id);
     }
 }
-
-// impl TdispHostDeviceTarget for ApicSoftwareDevice {
-//     fn tdisp_handle_guest_command(
-//         &mut self,
-//         command: tdisp::GuestToHostCommand,
-//     ) -> anyhow::Result<()> {
-//         let mut target = self.tdisp_target.lock();
-//         target.tdisp_handle_guest_command(command)
-//     }
-// }
 
 /// The table of interrupts for a device.
 #[derive(Inspect)]

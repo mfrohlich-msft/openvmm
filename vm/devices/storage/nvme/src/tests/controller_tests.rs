@@ -15,9 +15,9 @@ use chipset_device::mmio::MmioIntercept;
 use chipset_device::pci::PciConfigSpace;
 use guestmem::GuestMemory;
 use guid::Guid;
+use openhcl_tdisp_resources::TestTdispRegisterNoOp;
 use pal_async::DefaultDriver;
 use pal_async::async_test;
-use pci_core::RegisterTdisp;
 use pci_core::msi::MsiInterruptSet;
 use pci_core::test_helpers::TestPciInterruptController;
 use user_driver::backoff::Backoff;
@@ -25,14 +25,6 @@ use vmcore::vm_task::SingleDriverBackend;
 use vmcore::vm_task::VmTaskDriverSource;
 use zerocopy::FromZeros;
 use zerocopy::IntoBytes;
-
-struct TestTdispRegister {}
-
-impl RegisterTdisp for TestTdispRegister {
-    fn register(&mut self, target: std::sync::Arc<dyn tdisp::TdispHostDeviceTarget>) {
-        todo!()
-    }
-}
 
 fn instantiate_controller(
     driver: DefaultDriver,
@@ -42,7 +34,7 @@ fn instantiate_controller(
     let mut mmio_reg = TestNvmeMmioRegistration {};
     let vm_task_driver = &VmTaskDriverSource::new(SingleDriverBackend::new(driver));
     let mut msi_interrupt_set = MsiInterruptSet::new();
-    let mut register_tdisp = TestTdispRegister {};
+    let mut register_tdisp = TestTdispRegisterNoOp {};
     let controller = NvmeController::new(
         vm_task_driver,
         gm.clone(),

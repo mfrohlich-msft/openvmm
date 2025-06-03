@@ -26,10 +26,3 @@ pub enum PciInterruptPin {
     IntC,
     IntD,
 }
-
-/// Trait for registering TDISP devices.
-/// [TDISP TODO] Move out of here.
-pub trait RegisterTdisp: Send {
-    /// Registers a TDISP capable device on the host.
-    fn register(&mut self, target: Arc<dyn tdisp::TdispHostDeviceTarget>);
-}

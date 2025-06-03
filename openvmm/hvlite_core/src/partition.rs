@@ -276,11 +276,9 @@ pub trait VpciDevice {
     fn target(self: Arc<Self>) -> Arc<dyn MsiInterruptTarget>;
 }
 
-impl<T: 'static + VpciInterruptMapper + MsiInterruptTarget + TdispHostDeviceTarget> VpciDevice
-    for T
-{
-    fn interrupt_mapper(self: Arc<Self>) -> Arc<dyn VpciInterruptMapper> {
-        self
+impl<T: 'static + MapVpciInterrupt + MsiInterruptTarget> VpciDevice for T {
+    fn interrupt_mapper(self: Arc<Self>) -> VpciInterruptMapper {
+        VpciInterruptMapper::new(self)
     }
 
     fn target(self: Arc<Self>) -> Arc<dyn MsiInterruptTarget> {

@@ -11,7 +11,7 @@ use chipset_device_resources::ResolvedChipsetDevice;
 use guestmem::DoorbellRegistration;
 use guestmem::GuestMemory;
 use guestmem::MemoryMapper;
-use pci_core::RegisterTdisp;
+use openhcl_tdisp_resources::RegisterTdisp;
 use pci_core::msi::RegisterMsi;
 use std::sync::Arc;
 use vm_resource::CanResolveTo;

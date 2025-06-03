@@ -2,19 +2,13 @@
 # Licensed under the MIT License.
 
 [package]
-name = "openhcl_tdisp"
+name = "openhcl_tdisp_resources"
 rust-version.workspace = true
 edition.workspace = true
 
 [dependencies]
-hcl.workspace = true
-
-tracing.workspace = true
-hvdef.workspace = true
 inspect.workspace = true
 tdisp.workspace = true
-openhcl_tdisp_resources.workspace = true
-memoryblock.workspace = true
 
 anyhow.workspace = true
 

@@ -13,6 +13,7 @@ use chipset_device::mmio::MmioIntercept;
 use chipset_device::pci::PciConfigSpace;
 use inspect::Inspect;
 use inspect::InspectMut;
+use openhcl_tdisp_resources::ClientDevice;
 use pci_core::msi::MsiInterruptSet;
 use user_driver::DeviceBacking;
 use user_driver::DmaClient;
@@ -71,7 +72,7 @@ impl<T: 'static + Send + InspectMut + MmioIntercept, U: 'static + DmaClient> Dev
         self.device.map_interrupt(msix, _cpu)
     }
 
-    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>> {
+    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>> {
         None
     }
 }

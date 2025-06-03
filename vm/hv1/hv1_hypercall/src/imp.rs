@@ -595,6 +595,13 @@ pub trait TdispDispatch {
     /// Process a TDISP command sent from the guest to the host.
     fn tdisp_dispatch_from_guest(&mut self, command: defs::TdispGuestToHostCommand)
     -> HvResult<()>;
+
+    /// Write the response from a command to the guest.
+    fn tdisp_write_response_gpa(
+        &self,
+        response_gpa: u64,
+        response: hvdef::hypercall::TdispGuestToHostResponse,
+    ) -> HvResult<()>;
 }
 
 /// Defines the `HvTdispDispatch` hypercall for x64.

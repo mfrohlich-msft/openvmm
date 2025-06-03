@@ -8,6 +8,7 @@
 //! See: `openhcl_tdisp` for more information.
 
 use inspect::Inspect;
+use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 pub use tdisp::TdispCommandId;
@@ -26,4 +27,18 @@ pub trait ClientDevice: Send + Sync + Inspect {
         &self,
         command_id: TdispCommandId,
     ) -> anyhow::Result<GuestToHostResponse>;
+}
+
+/// Trait for registering TDISP devices.
+pub trait RegisterTdisp: Send {
+    /// Registers a TDISP capable device on the host.
+    fn register(&mut self, target: Arc<dyn tdisp::TdispHostDeviceTarget>);
+}
+
+pub struct TestTdispRegisterNoOp {}
+
+impl RegisterTdisp for TestTdispRegisterNoOp {
+    fn register(&mut self, _target: Arc<dyn tdisp::TdispHostDeviceTarget>) {
+        todo!()
+    }
 }

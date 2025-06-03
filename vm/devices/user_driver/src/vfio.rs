@@ -16,6 +16,7 @@ use futures::FutureExt;
 use futures_concurrency::future::Race;
 use inspect::Inspect;
 use inspect_counters::SharedCounter;
+use openhcl_tdisp_resources::ClientDevice;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use pal_async::wait::PolledWait;
@@ -57,7 +58,7 @@ pub struct VfioDevice {
     #[inspect(skip)]
     config_space: vfio_sys::RegionInfo,
     dma_client: Arc<dyn DmaClient>,
-    tdisp_client: Option<Arc<dyn tdisp::ClientDevice>>,
+    tdisp_client: Option<Arc<dyn ClientDevice>>,
 }
 
 #[derive(Inspect)]
@@ -206,7 +207,7 @@ impl VfioDevice {
 
     /// Enables a TDISP client interface on this VFIO device.
     /// [TODO] Traitify this?
-    pub fn enable_tdisp(&mut self, tdisp_client: Arc<dyn tdisp::ClientDevice>) {
+    pub fn enable_tdisp(&mut self, tdisp_client: Arc<dyn ClientDevice>) {
         assert!(self.tdisp_client.is_none());
         self.tdisp_client = Some(tdisp_client);
     }
@@ -317,7 +318,7 @@ impl DeviceBacking for VfioDevice {
         Ok(interrupt.insert(new_interrupt).interrupt.clone())
     }
 
-    fn tdisp_client(&self) -> Option<Arc<dyn tdisp::ClientDevice>> {
+    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>> {
         self.tdisp_client.clone()
     }
 }

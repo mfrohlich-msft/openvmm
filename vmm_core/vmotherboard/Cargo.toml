@@ -43,6 +43,7 @@ pci_bus.workspace = true
 vga_proxy = { optional = true, workspace = true }
 vga = { optional = true, workspace = true }
 watchdog_core.workspace = true
+openhcl_tdisp_resources.workspace = true
 
 address_filter.workspace = true
 arc_cyclic_builder.workspace = true
