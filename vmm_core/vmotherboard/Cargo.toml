@@ -65,8 +65,5 @@ paste.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
-# TDISP TODO: is this a workaround?
-pci_core.workspace = true
-
 [lints]
 workspace = true

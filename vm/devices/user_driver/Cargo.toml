@@ -22,7 +22,6 @@ event-listener.workspace = true
 guestmem.workspace = true
 vmcore.workspace = true
 openhcl_tdisp_resources.workspace = true
-safeatomic.workspace = true
 memoryblock.workspace = true
 
 anyhow.workspace = true

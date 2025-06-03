@@ -17,7 +17,6 @@ parking_lot.workspace = true
 pci_core.workspace = true
 tracing.workspace = true
 user_driver.workspace = true
-tdisp.workspace = true
 openhcl_tdisp_resources.workspace = true
 
 [lints]
