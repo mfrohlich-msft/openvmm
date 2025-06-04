@@ -6,6 +6,7 @@
 // UNSAFETY: Manual memory management around buffers and mmap.
 #![expect(unsafe_code)]
 
+use inspect::Inspect;
 use safeatomic::AtomicSliceOps;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
@@ -194,4 +195,15 @@ impl MemoryBlock {
     pub fn offset_in_page(&self) -> u32 {
         self.base as u32 % PAGE_SIZE as u32
     }
+}
+
+/// Device interfaces for DMA.
+pub trait DmaClient: Send + Sync + Inspect {
+    /// Allocate a new DMA buffer. This buffer must be zero initialized.
+    ///
+    /// TODO: string tag for allocation?
+    fn allocate_dma_buffer(&self, total_size: usize) -> anyhow::Result<MemoryBlock>;
+
+    /// Attach all previously allocated memory blocks.
+    fn attach_pending_buffers(&self) -> anyhow::Result<Vec<MemoryBlock>>;
 }

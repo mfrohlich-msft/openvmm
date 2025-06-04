@@ -21,6 +21,7 @@ uevent.workspace = true
 event-listener.workspace = true
 guestmem.workspace = true
 vmcore.workspace = true
+openhcl_tdisp.workspace = true
 openhcl_tdisp_resources.workspace = true
 memoryblock.workspace = true
 

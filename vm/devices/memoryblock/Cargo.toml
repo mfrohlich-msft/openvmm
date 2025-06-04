@@ -9,6 +9,8 @@ rust-version.workspace = true
 [dependencies]
 zerocopy.workspace = true
 safeatomic.workspace = true
+anyhow.workspace = true
+inspect.workspace = true
 
 [lints]
 workspace = true

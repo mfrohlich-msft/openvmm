@@ -2768,6 +2768,7 @@ dependencies = [
  "inspect",
  "libc",
  "memory_range",
+ "memoryblock",
  "nix 0.27.1",
  "open_enum",
  "pal",
@@ -2780,7 +2781,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tracelimit",
  "tracing",
- "user_driver",
  "x86defs",
  "zerocopy 0.8.24",
 ]
@@ -3996,6 +3996,8 @@ dependencies = [
 name = "memoryblock"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "inspect",
  "safeatomic",
  "zerocopy 0.8.24",
 ]
@@ -7769,6 +7771,7 @@ dependencies = [
  "libc",
  "memoryblock",
  "mesh",
+ "openhcl_tdisp",
  "openhcl_tdisp_resources",
  "pal_async",
  "pal_event",

@@ -16,7 +16,7 @@ sidecar_client.workspace = true
 tdcall = { workspace = true, features = ["tracing"] }
 x86defs.workspace = true
 inspect.workspace = true
-user_driver.workspace = true
+memoryblock.workspace = true
 
 anyhow.workspace = true
 bitvec.workspace = true

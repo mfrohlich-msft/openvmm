@@ -120,7 +120,8 @@ async fn try_create_mana_device(
     max_sub_channels: u16,
     dma_client: Arc<dyn DmaClient>,
 ) -> anyhow::Result<ManaDevice<VfioDevice>> {
-    let device = VfioDevice::new(driver_source, pci_id, dma_client)
+    // [TDISP TODO] TDISP support for MANA needed.
+    let device = VfioDevice::new(driver_source, pci_id, dma_client, 0)
         .await
         .context("failed to open device")?;
 

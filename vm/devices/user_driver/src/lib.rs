@@ -9,7 +9,7 @@
 
 use inspect::Inspect;
 use interrupt::DeviceInterrupt;
-use memory::MemoryBlock;
+pub use memoryblock::DmaClient;
 use openhcl_tdisp_resources::ClientDevice;
 use std::sync::Arc;
 
@@ -63,15 +63,4 @@ pub trait DeviceRegisterIo: Send + Sync {
     fn write_u32(&self, offset: usize, data: u32);
     /// Writes a `u64` register.
     fn write_u64(&self, offset: usize, data: u64);
-}
-
-/// Device interfaces for DMA.
-pub trait DmaClient: Send + Sync + Inspect {
-    /// Allocate a new DMA buffer. This buffer must be zero initialized.
-    ///
-    /// TODO: string tag for allocation?
-    fn allocate_dma_buffer(&self, total_size: usize) -> anyhow::Result<MemoryBlock>;
-
-    /// Attach all previously allocated memory blocks.
-    fn attach_pending_buffers(&self) -> anyhow::Result<Vec<MemoryBlock>>;
 }

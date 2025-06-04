@@ -22,15 +22,12 @@ use openhcl_dma_manager::AllocationVisibility;
 use openhcl_dma_manager::DmaClientParameters;
 use openhcl_dma_manager::DmaClientSpawner;
 use openhcl_dma_manager::LowerVtlPermissionPolicy;
-use openhcl_tdisp::TdispVfioClientDevice;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use std::collections::HashMap;
 use std::collections::hash_map;
-use std::sync::Arc;
 use thiserror::Error;
 use tracing::Instrument;
-use user_driver::DmaClient;
 use user_driver::vfio::VfioDevice;
 use vm_resource::AsyncResolveResource;
 use vm_resource::ResourceId;
@@ -54,8 +51,6 @@ enum InnerError {
     DeviceInitFailed(#[source] anyhow::Error),
     #[error("failed to create dma client for device")]
     DmaClient(#[source] anyhow::Error),
-    #[error("failed to dispatch a TDISP command")]
-    TdispClient(#[source] anyhow::Error),
     #[error("failed to get namespace {nsid}")]
     Namespace {
         nsid: u32,
@@ -335,21 +330,11 @@ impl NvmeManagerWorker {
                     })
                     .map_err(InnerError::DmaClient)?;
 
-                // [TDISP TODO] Better management of this buffer.
-                let response_buffer = dma_client.allocate_dma_buffer(0x1000).unwrap();
-
-                let mut device = VfioDevice::new(&self.driver_source, entry.key(), dma_client)
-                    .instrument(tracing::info_span!("vfio_device_open", pci_id))
-                    .await
-                    .map_err(InnerError::Vfio)?;
-
-                let tdisp_interface = Arc::new(
-                    TdispVfioClientDevice::new(device_id, response_buffer)
-                        .context("failed to create tdisp client")
-                        .map_err(InnerError::TdispClient)?,
-                );
-
-                device.enable_tdisp(tdisp_interface);
+                let device =
+                    VfioDevice::new(&self.driver_source, entry.key(), dma_client, device_id)
+                        .instrument(tracing::info_span!("vfio_device_open", pci_id))
+                        .await
+                        .map_err(InnerError::Vfio)?;
 
                 // TODO: For now, any isolation means use bounce buffering. This
                 // needs to change when we have nvme devices that support DMA to
@@ -425,10 +410,16 @@ impl NvmeManagerWorker {
             // This code can wait on each VFIO device until it is arrived.
             // A potential optimization would be to delay VFIO operation
             // until it is ready, but a redesign of VfioDevice is needed.
-            let vfio_device =
-                VfioDevice::restore(&self.driver_source, &disk.pci_id.clone(), true, dma_client)
-                    .instrument(tracing::info_span!("vfio_device_restore", pci_id))
-                    .await?;
+            // [TDISP TODO] Restore device_id from saved state.
+            let vfio_device = VfioDevice::restore(
+                &self.driver_source,
+                &disk.pci_id.clone(),
+                true,
+                dma_client,
+                0,
+            )
+            .instrument(tracing::info_span!("vfio_device_restore", pci_id))
+            .await?;
 
             // TODO: For now, any isolation means use bounce buffering. This
             // needs to change when we have nvme devices that support DMA to

@@ -16,6 +16,7 @@ use futures::FutureExt;
 use futures_concurrency::future::Race;
 use inspect::Inspect;
 use inspect_counters::SharedCounter;
+use openhcl_tdisp::TdispVfioClientDevice;
 use openhcl_tdisp_resources::ClientDevice;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
@@ -76,17 +77,20 @@ impl VfioDevice {
         driver_source: &VmTaskDriverSource,
         pci_id: &str,
         dma_client: Arc<dyn DmaClient>,
+        device_id: u64,
     ) -> anyhow::Result<Self> {
-        Self::restore(driver_source, pci_id, false, dma_client).await
+        Self::restore(driver_source, pci_id, false, dma_client, device_id).await
     }
 
     /// Creates a new VFIO-backed device for the PCI device with `pci_id`.
-    /// or creates a device from the saved state if provided.
+    /// or creates a device from the saved state if provided. If a non-zero device_id is provided,
+    /// it will be used as the hypervisor device id for the vfio device.
     pub async fn restore(
         driver_source: &VmTaskDriverSource,
         pci_id: &str,
         keepalive: bool,
         dma_client: Arc<dyn DmaClient>,
+        device_id: u64,
     ) -> anyhow::Result<Self> {
         let path = Path::new("/sys/bus/pci/devices").join(pci_id);
 
@@ -122,6 +126,19 @@ impl VfioDevice {
             anyhow::bail!("unsupported: kernel does not support dynamic msix allocation");
         }
 
+        let mut tdisp_interface: Option<Arc<dyn ClientDevice>> = None;
+
+        if device_id != 0 {
+            let tdisp_response_buffer = dma_client
+                .allocate_dma_buffer(0x1000)
+                .context("failed to allocate tdisp response buffer")?;
+
+            tdisp_interface = Some(Arc::new(
+                TdispVfioClientDevice::new(device_id, tdisp_response_buffer)
+                    .context("failed to create tdisp client")?,
+            ));
+        }
+
         let config_space = device.region_info(VFIO_PCI_CONFIG_REGION_INDEX)?;
         let this = Self {
             pci_id: pci_id.into(),
@@ -133,7 +150,7 @@ impl VfioDevice {
             driver_source: driver_source.clone(),
             interrupts: Vec::new(),
             dma_client,
-            tdisp_client: None,
+            tdisp_client: tdisp_interface,
         };
 
         // Ensure bus master enable and memory space enable are set, and that
@@ -203,13 +220,6 @@ impl VfioDevice {
             read_fallback: SharedCounter::new(),
             write_fallback: SharedCounter::new(),
         })
-    }
-
-    /// Enables a TDISP client interface on this VFIO device.
-    /// [TODO] Traitify this?
-    pub fn enable_tdisp(&mut self, tdisp_client: Arc<dyn ClientDevice>) {
-        assert!(self.tdisp_client.is_none());
-        self.tdisp_client = Some(tdisp_client);
     }
 }
 
