@@ -27,7 +27,6 @@ thiserror.workspace = true
 tracing.workspace = true
 zerocopy.workspace = true
 safe_intrinsics.workspace = true
-tdisp.workspace = true
 openhcl_tdisp_resources.workspace = true
 
 [dev-dependencies]
