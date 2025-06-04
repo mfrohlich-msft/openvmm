@@ -21,7 +21,6 @@ use memory_range::MemoryRange;
 use pci_core::msi::MsiInterruptTarget;
 use std::convert::Infallible;
 use std::sync::Arc;
-use tdisp::TdispHostDeviceTarget;
 #[cfg(guest_arch = "aarch64")]
 use virt::Aarch64Partition as ArchPartition;
 use virt::PageVisibility;

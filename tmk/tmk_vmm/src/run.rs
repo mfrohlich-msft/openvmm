@@ -259,6 +259,13 @@ impl CpuIo for IoHandler<'_> {
         tracing::info!(irq, "eoi");
     }
 
+    fn tdisp_command_from_guest(
+        &self,
+        _command: tdisp::GuestToHostCommand,
+    ) -> Result<tdisp::GuestToHostResponse, String> {
+        Err("tdisp_command_from_guest not implemented".into())
+    }
+
     fn signal_synic_event(&self, vtl: Vtl, connection_id: u32, flag: u16) -> hvdef::HvResult<()> {
         let _ = (vtl, connection_id, flag);
         Err(HvError::InvalidConnectionId)

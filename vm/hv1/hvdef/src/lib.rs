@@ -861,7 +861,6 @@ pub struct TimerMessagePayload {
 pub mod hypercall {
     use super::*;
     use core::ops::RangeInclusive;
-    use zerocopy::TryFromBytes;
     use zerocopy::Unalign;
 
     /// The hypercall input value.

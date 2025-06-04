@@ -9,7 +9,6 @@ use guestmem::GuestMemory;
 use pci_core::msi::MsiInterruptSet;
 use pci_core::msi::MsiInterruptTarget;
 use std::sync::Arc;
-use tdisp::TdispHostDeviceTarget;
 use vm_resource::Resource;
 use vm_resource::ResourceResolver;
 use vm_resource::kind::PciDeviceHandleKind;

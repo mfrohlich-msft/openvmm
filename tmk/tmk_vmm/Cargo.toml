@@ -21,6 +21,7 @@ vm_topology.workspace = true
 vmcore.workspace = true
 vm_loader.workspace = true
 x86defs.workspace = true
+tdisp.workspace = true
 
 pal_async.workspace = true
 mesh.workspace = true

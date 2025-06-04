@@ -110,7 +110,9 @@ fn serialize_payload(
     match payload {
         TdispCommandResponsePayload::GetDeviceInterfaceInfo(payload) => payload
             .write_to(&mut target[0..size_of::<TdispDeviceInterfaceInfo>()])
-            .map_err(|e| anyhow::anyhow!("failed to serialize GetDeviceInterfaceInfo payload")),
+            .map_err(|e| {
+                anyhow::anyhow!("failed to serialize GetDeviceInterfaceInfo payload: {}", e)
+            }),
         _ => Ok(()),
     }
 }
@@ -148,11 +150,22 @@ fn tdisp_state_to_hvcall(tdi_state: TdispTdiState) -> u64 {
 /// Represents a TDISP command sent from the guest to the host.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TdispCommandId {
+    /// Invalid command id.
     Unknown,
+
+    /// Request the device's TDISP interface information.
     GetDeviceInterfaceInfo,
+
+    /// Bind the device to the current partition and transition to Locked.
     Bind,
+
+    /// Get the TDI report for attestation from the host for the device.
     GetTdiReport,
+
+    /// Transition the device to the Start state after successful attestation.
     StartTdi,
+
+    /// Unbind the device from the partition, reverting it back to the Unlocked state.
     Unbind,
 }
 
@@ -194,7 +207,14 @@ pub struct TdispDeviceInterfaceInfo {
 
 #[derive(Debug, Clone, Copy, FromBytes, IntoBytes, KnownLayout, Immutable)]
 pub struct TdispGuestInterfaceInfo {
+    /// The major version for the interface. This does not necessarily match to a TDISP specification version.
+    /// [TDISP TODO] dead_code
+    #[expect(dead_code)]
     pub interface_version_major: u32,
+
+    /// The minor version for the interface. This does not necessarily match to a TDISP specification version.
+    /// [TDISP TODO] dead_code
+    #[expect(dead_code)]
     pub interface_version_minor: u32,
 }
 

@@ -471,6 +471,14 @@ impl TdispDispatch for TestHypercallHandler<'_> {
         tracing::error!("Not implemented: HvTdispDispatch");
         Err(HvError::InvalidHypercallCode)
     }
+
+    fn tdisp_write_response_gpa(
+        &self,
+        _response_gpa: u64,
+        _response: hvdef::hypercall::TdispGuestToHostResponse,
+    ) -> HvResult<()> {
+        Err(HvError::FeatureUnavailable)
+    }
 }
 
 impl VtlSwitchOps for TestHypercallHandler<'_> {

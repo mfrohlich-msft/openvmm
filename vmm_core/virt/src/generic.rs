@@ -32,8 +32,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::task::Poll;
 use std::task::Waker;
-use tdisp::TdispClientDevice;
-use tdisp::TdispHostDeviceTarget;
 use vm_topology::memory::MemoryLayout;
 use vm_topology::processor::ProcessorTopology;
 use vmcore::monitor::MonitorId;

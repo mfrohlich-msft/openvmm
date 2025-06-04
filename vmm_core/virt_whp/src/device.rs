@@ -16,7 +16,6 @@ use pci_core::msi::MsiInterruptTarget;
 use pci_core::spec::cfg_space;
 use std::os::windows::prelude::*;
 use std::sync::Arc;
-use tdisp::TdispHostDeviceTarget;
 use vmcore::device_state::ChangeDeviceState;
 use vmcore::save_restore::RestoreError;
 use vmcore::save_restore::SaveError;

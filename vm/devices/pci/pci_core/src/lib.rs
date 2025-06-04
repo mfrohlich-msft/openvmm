@@ -6,8 +6,6 @@
 //! A collection of constants, types, and traits that are shared across all PCI
 //! implementations (i.e: vpci, pci_gen1, pcie).
 
-use std::sync::Arc;
-
 pub mod test_helpers;
 
 pub mod bar_mapping;

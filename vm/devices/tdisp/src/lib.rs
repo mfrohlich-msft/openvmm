@@ -12,15 +12,8 @@
 mod command;
 use command::*;
 pub use command::{GuestToHostCommand, GuestToHostResponse, TdispCommandId};
-use hvdef::hypercall::TdispGuestToHostResponse;
 use inspect::Inspect;
-use std::fmt::Display;
-use std::io::Error;
 use thiserror::Error;
-use zerocopy::FromBytes;
-use zerocopy::Immutable;
-use zerocopy::IntoBytes;
-use zerocopy::KnownLayout;
 
 const TDISP_VERSION_MAJOR: u32 = 1;
 const TDISP_VERSION_MINOR: u32 = 0;
@@ -53,6 +46,7 @@ impl TdispHostDeviceTargetEmulator {
         }
     }
 
+    /// Reset the emulator.
     pub fn reset(&self) {}
 
     /// Get the device interface info for this device.
@@ -70,7 +64,7 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
         &self,
         command: GuestToHostCommand,
     ) -> Result<GuestToHostResponse, String> {
-        tracing::warn!(
+        tracing::debug!(
             "TdispHostDeviceTargetEmulator got a TDISP command: {:?}",
             command
         );

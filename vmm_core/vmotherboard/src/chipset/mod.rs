@@ -20,10 +20,10 @@ use chipset_device::io::IoResult;
 use closeable_mutex::CloseableMutex;
 use cvm_tracing::CVM_CONFIDENTIAL;
 use inspect::Inspect;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::poll_fn;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 /// The "glue" that interconnects virtual devices, and exposes an API for
 /// external entities (such as VCPUs) to access devices.
@@ -229,7 +229,7 @@ impl Chipset {
     ) -> Result<tdisp::GuestToHostResponse, String> {
         // Find the TDISP device for this device ID.
         let device_id = command.device_id;
-        let tdisp_mapping = self.tdisp_devices.lock().unwrap();
+        let tdisp_mapping = self.tdisp_devices.lock();
         let tdisp_device = tdisp_mapping.get(&device_id);
         if let Some(tdisp_device) = tdisp_device {
             tdisp_device.tdisp_handle_guest_command(command)

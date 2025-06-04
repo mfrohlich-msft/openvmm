@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 pub use tdisp::TdispCommandId;
+
 /// Represents a TDISP device assigned to a guest partition. This trait allows
 /// the guest to send TDISP commands to the host through the backing hypercall
 /// interface.
@@ -35,6 +36,7 @@ pub trait RegisterTdisp: Send {
     fn register(&mut self, target: Arc<dyn tdisp::TdispHostDeviceTarget>);
 }
 
+/// No operation struct for tests to implement `RegisterTdisp`.
 pub struct TestTdispRegisterNoOp {}
 
 impl RegisterTdisp for TestTdispRegisterNoOp {

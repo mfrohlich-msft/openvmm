@@ -3,7 +3,6 @@
 
 //! Traits for working with MSI interrupts.
 
-use inspect::Inspect;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::Weak;

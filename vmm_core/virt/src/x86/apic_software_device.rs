@@ -14,7 +14,6 @@ use slab::Slab;
 use std::collections::HashMap;
 use std::collections::hash_map;
 use std::sync::Arc;
-use tdisp::TdispHostDeviceTarget;
 use thiserror::Error;
 use vmcore::vpci_msi::MapVpciInterrupt;
 use vmcore::vpci_msi::MsiAddressData;
@@ -36,7 +35,6 @@ pub struct ApicSoftwareDevices {
     inner: Arc<DevicesInner>,
 }
 
-type DeviceTableMap = Mutex<HashMap<u64, Arc<Mutex<dyn TdispHostDeviceTarget>>>>;
 type InterruptTableMap = Mutex<HashMap<u64, Arc<Mutex<InterruptTable>>>>;
 
 #[derive(Inspect)]
@@ -44,10 +42,6 @@ struct DevicesInner {
     #[inspect(flatten, with = "inspect_tables")]
     tables: InterruptTableMap,
 
-    // TDISP TODO: Make this inspectable
-    // #[inspect(with = "inspect_device_id_table")]
-    // #[inspect(skip)]
-    // device_table: DeviceTableMap,
     #[inspect(skip)]
     apic_id_map: Vec<u32>,
 }

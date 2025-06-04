@@ -183,7 +183,8 @@ impl NvmeManager {
 
 enum Request {
     Inspect(inspect::Deferred),
-    ForceLoadDriver(inspect::DeferredUpdate),
+    // [TISP TODO]
+    // ForceLoadDriver(inspect::DeferredUpdate),
     GetNamespace(Rpc<(String, u32, u64), Result<nvme_driver::Namespace, NamespaceError>>),
     Save(Rpc<(), Result<NvmeManagerSavedState, anyhow::Error>>),
     Shutdown {
@@ -249,20 +250,20 @@ impl NvmeManagerWorker {
             };
             match req {
                 Request::Inspect(deferred) => deferred.inspect(&self),
-                Request::ForceLoadDriver(update) => {
-                    // [TDISP TODO] This doesn't work without a device_id field. This can be
-                    // inferred from the pci_id...
+                // Request::ForceLoadDriver(update) => {
+                //     // [TDISP TODO] This doesn't work without a device_id field. This can be
+                //     // inferred from the pci_id...
 
-                    // match self.get_driver(update.new_value().to_owned()).await {
-                    //     Ok(_) => {
-                    //         let pci_id = update.new_value().into();
-                    //         update.succeed(pci_id);
-                    //     }
-                    //     Err(err) => {
-                    //         update.fail(err);
-                    //     }
-                    // }
-                }
+                //     match self.get_driver(update.new_value().to_owned()).await {
+                //         Ok(_) => {
+                //             let pci_id = update.new_value().into();
+                //             update.succeed(pci_id);
+                //         }
+                //         Err(err) => {
+                //             update.fail(err);
+                //         }
+                //     }
+                // }
                 Request::GetNamespace(rpc) => {
                     rpc.handle(async |(pci_id, nsid, device_id)| {
                         self.get_namespace(pci_id.clone(), nsid, device_id)

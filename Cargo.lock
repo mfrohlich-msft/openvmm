@@ -7005,6 +7005,7 @@ dependencies = [
  "page_table",
  "pal_async",
  "pal_uring",
+ "tdisp",
  "tmk_protocol",
  "tracing",
  "tracing-subscriber",

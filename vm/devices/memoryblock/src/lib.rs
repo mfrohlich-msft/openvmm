@@ -16,7 +16,11 @@ use zerocopy::KnownLayout;
 
 /// The 4KB page size used by user-mode devices.
 pub const PAGE_SIZE: usize = 4096;
+
+/// The 4KB page size used by user-mode devices.
 pub const PAGE_SIZE32: u32 = 4096;
+
+/// The 4KB page size used by user-mode devices.
 pub const PAGE_SIZE64: u64 = PAGE_SIZE as u64;
 
 /// A mapped buffer that can be accessed by the host or the device.

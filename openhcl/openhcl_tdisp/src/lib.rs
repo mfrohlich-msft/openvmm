@@ -7,7 +7,6 @@
 //! See: `vm/tdisp` for more information.
 
 use anyhow::Context;
-use hvdef::hypercall::TdispGuestToHostCommand;
 use hvdef::hypercall::TdispGuestToHostResponse;
 use inspect::Inspect;
 use memoryblock::MemoryBlock;
@@ -59,7 +58,7 @@ impl TdispVfioClientDevice {
     /// Reads the response from the hypercall after it executed successfully.
     fn read_response(&self, command: &GuestToHostCommand) -> anyhow::Result<GuestToHostResponse> {
         let response: TdispGuestToHostResponse = self.response_buffer.read_obj(0);
-        let response_id: TdispCommandId = command.command_id.into();
+        let response_id: TdispCommandId = command.command_id;
         if response_id != command.command_id {
             return Err(anyhow::anyhow!(
                 "response command ID mismatch, expected {:?}, got {:?}",
@@ -77,7 +76,7 @@ impl ClientDevice for TdispVfioClientDevice {
         &self,
         mut command: GuestToHostCommand,
     ) -> anyhow::Result<GuestToHostResponse> {
-        tracing::debug!("tdisp_command_to_host: command = {:?}", &command);
+        tracing::error!("tdisp_command_to_host: command = {:?}", &command);
         command.response_gpa = self.response_buffer.pfns()[0] * (PAGE_SIZE as u64);
         command.device_id = self.device_id;
 

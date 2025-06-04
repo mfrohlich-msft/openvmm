@@ -14,10 +14,10 @@ use chipset_device::ChipsetDevice;
 use chipset_device_resources::LineSetId;
 use closeable_mutex::CloseableMutex;
 use openhcl_tdisp_resources::RegisterTdisp;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::Weak;
 use thiserror::Error;
 use vmcore::line_interrupt::LineInterrupt;
@@ -141,7 +141,7 @@ pub struct ArcMutexChipsetTdispRegistration {
 
 impl RegisterTdisp for ArcMutexChipsetTdispRegistration {
     fn register(&mut self, target: Arc<dyn tdisp::TdispHostDeviceTarget>) {
-        let mut device_map = self.device_map.lock().unwrap();
+        let mut device_map = self.device_map.lock();
         device_map.insert(self.device_id, target);
     }
 }
