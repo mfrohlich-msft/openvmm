@@ -196,6 +196,7 @@ impl From<u64> for TdispCommandId {
     }
 }
 
+/// Represents the TDISP device interface information, such as the version and supported features.
 #[derive(Debug, Clone, Copy, FromBytes, IntoBytes, KnownLayout, Immutable)]
 pub struct TdispDeviceInterfaceInfo {
     pub interface_version_major: u32,

@@ -22,7 +22,8 @@ use inspect::Inspect;
 use mesh::payload::Protobuf;
 use mesh::rpc::Rpc;
 use mesh::rpc::RpcSend;
-use openhcl_tdisp_resources::TdispCommandId;
+use openhcl_tdisp_resources::TDISP_INTERFACE_VERSION_MAJOR;
+use openhcl_tdisp_resources::TDISP_INTERFACE_VERSION_MINOR;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use save_restore::NvmeDriverWorkerSavedState;
@@ -271,18 +272,37 @@ impl<T: DeviceBacking> NvmeDriver<T> {
     }
 
     /// Enables the device, aliasing the admin queue memory and adding IO queues.
+    #[allow(clippy::absurd_extreme_comparisons)]
     async fn enable(&mut self, requested_io_queue_count: u16) -> anyhow::Result<()> {
-        tracing::info!(" !!! Enabling nvme device!");
-
         const ADMIN_QID: u16 = 0;
 
         let task = &mut self.task.as_mut().unwrap();
         let worker = task.task_mut();
 
+        // Request TDISP interface information to determine if this device is TDISP capable.
         if let Some(client) = worker.device.tdisp_client() {
-            client
-                .tdisp_command_no_args(TdispCommandId::GetDeviceInterfaceInfo)
-                .unwrap();
+            let tdisp_interface_info = client.tdisp_get_device_interface_info();
+            if let Ok(tdisp_interface_info) = tdisp_interface_info {
+                if tdisp_interface_info.interface_version_major <= TDISP_INTERFACE_VERSION_MAJOR
+                    && tdisp_interface_info.interface_version_minor <= TDISP_INTERFACE_VERSION_MINOR
+                {
+                    tracing::info!(
+                        "NVMe Device is TDISP capable, got version: {}.{}",
+                        tdisp_interface_info.interface_version_major,
+                        tdisp_interface_info.interface_version_minor
+                    );
+                } else {
+                    tracing::warn!(
+                        "NVMe Device is TDISP capable, but version mismatched: expected {}.{}, got {}.{}",
+                        TDISP_INTERFACE_VERSION_MAJOR,
+                        TDISP_INTERFACE_VERSION_MINOR,
+                        tdisp_interface_info.interface_version_major,
+                        tdisp_interface_info.interface_version_minor
+                    );
+                }
+            } else {
+                tracing::warn!("NVMe Device is not TDISP capable.");
+            }
         }
 
         // Request the admin queue pair be the same size to avoid potential

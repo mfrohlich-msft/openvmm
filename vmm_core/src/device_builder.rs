@@ -73,8 +73,6 @@ pub async fn build_vpci_device(
     {
         let vpci_bus_name = format!("vpci:{instance_id}");
 
-        tracing::error!(" !!! device_id: 0x{device_id:x}, vpci_bus_name: {vpci_bus_name}");
-
         chipset_builder
             .arc_mutex_device(vpci_bus_name)
             .try_add_async(async |services| {

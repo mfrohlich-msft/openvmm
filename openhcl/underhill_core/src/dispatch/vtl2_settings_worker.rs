@@ -976,11 +976,6 @@ async fn make_disk_type_from_physical_device(
     {
         // Wait for the NVMe controller to arrive.
         let (pci_id, devpath, device_id) = vpci_path(&controller_instance_id);
-        let devpath_display = devpath.to_string_lossy();
-        tracing::error!(
-            " !!! controller_instance_id: {controller_instance_id}, pci_id: {pci_id}, devpath: {devpath_display}"
-        );
-
         async {
             ctx.until_cancelled(storage_context.uevent_listener.wait_for_devpath(&devpath))
                 .await??;

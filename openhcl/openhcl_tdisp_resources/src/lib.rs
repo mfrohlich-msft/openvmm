@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 pub use tdisp::TdispCommandId;
+pub use tdisp::{TDISP_INTERFACE_VERSION_MAJOR, TDISP_INTERFACE_VERSION_MINOR};
 
 /// Represents a TDISP device assigned to a guest partition. This trait allows
 /// the guest to send TDISP commands to the host through the backing hypercall
@@ -28,6 +29,9 @@ pub trait ClientDevice: Send + Sync + Inspect {
         &self,
         command_id: TdispCommandId,
     ) -> anyhow::Result<GuestToHostResponse>;
+
+    /// Checks if the device is TDISP capable and returns the device interface info if so.
+    fn tdisp_get_device_interface_info(&self) -> anyhow::Result<tdisp::TdispDeviceInterfaceInfo>;
 }
 
 /// Trait for registering TDISP devices.

@@ -612,8 +612,6 @@ pub type HvTdispDispatch =
 impl<T: TdispDispatch> HypercallDispatch<HvTdispDispatch> for T {
     fn dispatch(&mut self, params: HypercallParameters<'_>) -> HypercallOutput {
         HvTdispDispatch::run(params, |input| {
-            tracing::info!(" !!! Host dispatching TDISP command: {}", input.command_id);
-
             self.tdisp_dispatch_from_guest(*input)?;
 
             Ok(())

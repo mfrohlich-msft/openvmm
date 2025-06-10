@@ -11,12 +11,15 @@
 
 mod command;
 use command::*;
-pub use command::{GuestToHostCommand, GuestToHostResponse, TdispCommandId};
+pub use command::{
+    GuestToHostCommand, GuestToHostResponse, TdispCommandId, TdispCommandResponsePayload,
+    TdispDeviceInterfaceInfo,
+};
 use inspect::Inspect;
 use thiserror::Error;
 
-const TDISP_VERSION_MAJOR: u32 = 1;
-const TDISP_VERSION_MINOR: u32 = 0;
+pub const TDISP_INTERFACE_VERSION_MAJOR: u32 = 1;
+pub const TDISP_INTERFACE_VERSION_MINOR: u32 = 0;
 
 /// Callback for receiving TDISP commands from the guest.
 pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()> + Send + Sync;
@@ -52,8 +55,8 @@ impl TdispHostDeviceTargetEmulator {
     /// Get the device interface info for this device.
     fn get_device_interface_info(&self) -> TdispDeviceInterfaceInfo {
         TdispDeviceInterfaceInfo {
-            interface_version_major: TDISP_VERSION_MAJOR,
-            interface_version_minor: TDISP_VERSION_MINOR,
+            interface_version_major: TDISP_INTERFACE_VERSION_MAJOR,
+            interface_version_minor: TDISP_INTERFACE_VERSION_MINOR,
             supported_features: 0,
         }
     }
@@ -64,10 +67,7 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
         &self,
         command: GuestToHostCommand,
     ) -> Result<GuestToHostResponse, String> {
-        tracing::debug!(
-            "TdispHostDeviceTargetEmulator got a TDISP command: {:?}",
-            command
-        );
+        tracing::info!("tdisp_handle_guest_command: command = {:?}", command);
 
         let mut error = TdispGuestOperationError::Success;
         let mut payload = TdispCommandResponsePayload::None;
@@ -89,13 +89,17 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
         }
         let state_after = self.machine.state();
 
-        Ok(GuestToHostResponse {
+        let resp = GuestToHostResponse {
             command_id: command.command_id,
             result: error,
             tdi_state_before: state_before,
             tdi_state_after: state_after,
             payload,
-        })
+        };
+
+        tracing::info!("tdisp_handle_guest_command: response = {:?}", resp);
+
+        Ok(resp)
     }
 }
 

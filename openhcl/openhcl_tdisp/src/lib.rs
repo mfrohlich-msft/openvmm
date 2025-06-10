@@ -15,6 +15,7 @@ use openhcl_tdisp_resources::ClientDevice;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 use tdisp::TdispCommandId;
+use tdisp::TdispCommandResponsePayload;
 
 /// Implements the `ClientDevice` trait for a VFIO device.
 pub struct TdispVfioClientDevice {
@@ -76,7 +77,8 @@ impl ClientDevice for TdispVfioClientDevice {
         &self,
         mut command: GuestToHostCommand,
     ) -> anyhow::Result<GuestToHostResponse> {
-        tracing::error!("tdisp_command_to_host: command = {:?}", &command);
+        tracing::info!("tdisp_command_to_host: command = {:?}", &command);
+
         command.response_gpa = self.response_buffer.pfns()[0] * (PAGE_SIZE as u64);
         command.device_id = self.device_id;
 
@@ -87,7 +89,7 @@ impl ClientDevice for TdispVfioClientDevice {
         // Response has now been written to the response buffer.
         let resp = self.read_response(&command)?;
 
-        tracing::error!("tdisp_command_to_host: response = {:?}", &resp);
+        tracing::info!("tdisp_command_to_host: response = {:?}", &resp);
 
         Ok(resp)
     }
@@ -102,6 +104,19 @@ impl ClientDevice for TdispVfioClientDevice {
             device_id: 0,
             command_id,
         })
+    }
+
+    /// Get the device interface info.
+    fn tdisp_get_device_interface_info(&self) -> anyhow::Result<tdisp::TdispDeviceInterfaceInfo> {
+        let res = self.tdisp_command_no_args(TdispCommandId::GetDeviceInterfaceInfo);
+
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::GetDeviceInterfaceInfo(info) => Ok(info),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
     }
 }
 

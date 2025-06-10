@@ -255,6 +255,10 @@ impl DeviceBacking for VfioDevice {
         self.dma_client.clone()
     }
 
+    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>> {
+        self.tdisp_client.clone()
+    }
+
     fn max_interrupt_count(&self) -> u32 {
         self.msix_info.count
     }
@@ -326,10 +330,6 @@ impl DeviceBacking for VfioDevice {
         };
 
         Ok(interrupt.insert(new_interrupt).interrupt.clone())
-    }
-
-    fn tdisp_client(&self) -> Option<Arc<dyn ClientDevice>> {
-        self.tdisp_client.clone()
     }
 }
 
