@@ -6779,6 +6779,7 @@ dependencies = [
  "anyhow",
  "hvdef",
  "inspect",
+ "parking_lot",
  "thiserror 2.0.12",
  "tracing",
  "zerocopy 0.8.24",

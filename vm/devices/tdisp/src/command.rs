@@ -98,6 +98,7 @@ fn deserialize_payload(
             .map_err(|_| anyhow::anyhow!("failed to deserialize GetDeviceInterfaceInfo payload"))?;
             Ok(TdispCommandResponsePayload::GetDeviceInterfaceInfo(payload))
         }
+        TdispCommandId::Bind => Ok(TdispCommandResponsePayload::None),
         _ => Ok(TdispCommandResponsePayload::None),
     }
 }
@@ -113,7 +114,7 @@ fn serialize_payload(
             .map_err(|e| {
                 anyhow::anyhow!("failed to serialize GetDeviceInterfaceInfo payload: {}", e)
             }),
-        _ => Ok(()),
+        TdispCommandResponsePayload::None => Ok(()),
     }
 }
 

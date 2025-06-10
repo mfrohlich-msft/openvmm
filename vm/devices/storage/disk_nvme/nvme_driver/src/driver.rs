@@ -73,6 +73,8 @@ pub struct NvmeDriver<T: DeviceBacking> {
     /// Keeps the controller connected (CC.EN==1) while servicing.
     nvme_keepalive: bool,
     bounce_buffer: bool,
+    /// If true, the device is an assigned TDI and must go through a TDISP assignment flow before it is functional.
+    tdisp_enabled: bool,
 }
 
 #[derive(Inspect)]
@@ -268,6 +270,7 @@ impl<T: DeviceBacking> NvmeDriver<T> {
             namespaces: vec![],
             nvme_keepalive: false,
             bounce_buffer,
+            tdisp_enabled: false,
         })
     }
 
@@ -280,28 +283,45 @@ impl<T: DeviceBacking> NvmeDriver<T> {
         let worker = task.task_mut();
 
         // Request TDISP interface information to determine if this device is TDISP capable.
-        if let Some(client) = worker.device.tdisp_client() {
-            let tdisp_interface_info = client.tdisp_get_device_interface_info();
-            if let Ok(tdisp_interface_info) = tdisp_interface_info {
-                if tdisp_interface_info.interface_version_major <= TDISP_INTERFACE_VERSION_MAJOR
-                    && tdisp_interface_info.interface_version_minor <= TDISP_INTERFACE_VERSION_MINOR
-                {
-                    tracing::info!(
-                        "NVMe Device is TDISP capable, got version: {}.{}",
-                        tdisp_interface_info.interface_version_major,
-                        tdisp_interface_info.interface_version_minor
-                    );
-                } else {
-                    tracing::warn!(
-                        "NVMe Device is TDISP capable, but version mismatched: expected {}.{}, got {}.{}",
-                        TDISP_INTERFACE_VERSION_MAJOR,
-                        TDISP_INTERFACE_VERSION_MINOR,
-                        tdisp_interface_info.interface_version_major,
-                        tdisp_interface_info.interface_version_minor
-                    );
+        // [TDISP TODO] Move all of this to a more generic place.
+        let tdisp_client = worker.device.tdisp_client();
+
+        match tdisp_client {
+            Some(client) => {
+                let tdisp_interface_info = client.tdisp_get_device_interface_info();
+                if let Ok(tdisp_interface_info) = tdisp_interface_info {
+                    if tdisp_interface_info.interface_version_major <= TDISP_INTERFACE_VERSION_MAJOR
+                        && tdisp_interface_info.interface_version_minor
+                            <= TDISP_INTERFACE_VERSION_MINOR
+                    {
+                        tracing::info!(
+                            "NVMe Device is TDISP capable, got version: {}.{}",
+                            tdisp_interface_info.interface_version_major,
+                            tdisp_interface_info.interface_version_minor
+                        );
+                        self.tdisp_enabled = true;
+
+                        tracing::info!("Beginning TDISP bind flow.");
+
+                        let bind_res = client.tdisp_bind_interface();
+                        if let Err(err) = bind_res {
+                            tracing::error!("TDISP bind flow failed: {:?}", err);
+                        } else {
+                            tracing::info!("TDISP bind flow succeeded.");
+                        }
+                    } else {
+                        tracing::warn!(
+                            "NVMe Device is TDISP capable, but version mismatched: expected {}.{}, got {}.{}",
+                            TDISP_INTERFACE_VERSION_MAJOR,
+                            TDISP_INTERFACE_VERSION_MINOR,
+                            tdisp_interface_info.interface_version_major,
+                            tdisp_interface_info.interface_version_minor
+                        );
+                    }
                 }
-            } else {
-                tracing::warn!("NVMe Device is not TDISP capable.");
+            }
+            None => {
+                tracing::info!("NVMe Device is not TDISP capable.");
             }
         }
 
@@ -628,6 +648,7 @@ impl<T: DeviceBacking> NvmeDriver<T> {
             namespaces: vec![],
             nvme_keepalive: true,
             bounce_buffer,
+            tdisp_enabled: false,
         };
 
         let task = &mut this.task.as_mut().unwrap();

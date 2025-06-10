@@ -13,6 +13,7 @@ hvdef.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 zerocopy.workspace = true
+parking_lot.workspace = true
 
 [lints]
 workspace = true

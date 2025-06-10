@@ -10,15 +10,18 @@
 //! - AMD SEV-TIO
 
 mod command;
-use command::*;
 pub use command::{
     GuestToHostCommand, GuestToHostResponse, TdispCommandId, TdispCommandResponsePayload,
     TdispDeviceInterfaceInfo,
 };
 use inspect::Inspect;
+use parking_lot::Mutex;
 use thiserror::Error;
 
+/// Major version of the TDISP guest-to-host interface.
 pub const TDISP_INTERFACE_VERSION_MAJOR: u32 = 1;
+
+/// Minor version of the TDISP guest-to-host interface.
 pub const TDISP_INTERFACE_VERSION_MINOR: u32 = 0;
 
 /// Callback for receiving TDISP commands from the guest.
@@ -38,14 +41,14 @@ pub trait TdispHostDeviceTarget: Send + Sync {
 
 /// An emulator which runs the TDISP state machine for a synthetic device.
 pub struct TdispHostDeviceTargetEmulator {
-    machine: TdispHostStateMachine,
+    machine: Mutex<TdispHostStateMachine>,
 }
 
 impl TdispHostDeviceTargetEmulator {
     /// Create a new emulator which runs the TDISP state machine for a synthetic device.
     pub fn new(debug_device_id: &str) -> Self {
         Self {
-            machine: TdispHostStateMachine::new(debug_device_id.to_owned()),
+            machine: Mutex::new(TdispHostStateMachine::new(debug_device_id.to_owned())),
         }
     }
 
@@ -71,23 +74,38 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
 
         let mut error = TdispGuestOperationError::Success;
         let mut payload = TdispCommandResponsePayload::None;
-        let state_before = self.machine.state();
+        let mut locked_machine = self.machine.lock();
+        let state_before = locked_machine.state();
         match command.command_id {
             TdispCommandId::GetDeviceInterfaceInfo => {
                 let interface_info = self.get_device_interface_info();
                 payload = TdispCommandResponsePayload::GetDeviceInterfaceInfo(interface_info);
             }
-            TdispCommandId::Bind
-            | TdispCommandId::GetTdiReport
-            | TdispCommandId::StartTdi
-            | TdispCommandId::Unbind => {
+            TdispCommandId::Bind => {
+                let bind_res = locked_machine.request_lock_device_resources();
+                if let Err(err) = bind_res {
+                    error = err;
+                } else {
+                    payload = TdispCommandResponsePayload::None;
+                }
+            }
+            TdispCommandId::GetTdiReport | TdispCommandId::StartTdi | TdispCommandId::Unbind => {
                 error = TdispGuestOperationError::NotImplemented;
             }
             TdispCommandId::Unknown => {
                 error = TdispGuestOperationError::InvalidGuestCommandId;
             }
         }
-        let state_after = self.machine.state();
+        let state_after = locked_machine.state();
+
+        match error {
+            TdispGuestOperationError::Success => {
+                tracing::info!("tdisp_handle_guest_command: Success");
+            }
+            _ => {
+                tracing::error!("tdisp_handle_guest_command: Error: {:?}", error);
+            }
+        }
 
         let resp = GuestToHostResponse {
             command_id: command.command_id,

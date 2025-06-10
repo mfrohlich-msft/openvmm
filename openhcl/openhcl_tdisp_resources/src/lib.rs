@@ -17,6 +17,7 @@ pub use tdisp::{TDISP_INTERFACE_VERSION_MAJOR, TDISP_INTERFACE_VERSION_MINOR};
 /// Represents a TDISP device assigned to a guest partition. This trait allows
 /// the guest to send TDISP commands to the host through the backing hypercall
 /// interface.
+/// [TDISP TODO] Change out `anyhow` for a `TdispError` type.
 pub trait ClientDevice: Send + Sync + Inspect {
     /// Send a TDISP command to the host through backing hypercall interface.
     fn tdisp_command_to_host(
@@ -32,6 +33,9 @@ pub trait ClientDevice: Send + Sync + Inspect {
 
     /// Checks if the device is TDISP capable and returns the device interface info if so.
     fn tdisp_get_device_interface_info(&self) -> anyhow::Result<tdisp::TdispDeviceInterfaceInfo>;
+
+    /// Bind the device to the current partition and transition to Locked.
+    fn tdisp_bind_interface(&self) -> anyhow::Result<()>;
 }
 
 /// Trait for registering TDISP devices.

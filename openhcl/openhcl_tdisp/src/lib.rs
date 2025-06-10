@@ -16,6 +16,7 @@ use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 use tdisp::TdispCommandId;
 use tdisp::TdispCommandResponsePayload;
+use tdisp::TdispTdiState;
 
 /// Implements the `ClientDevice` trait for a VFIO device.
 pub struct TdispVfioClientDevice {
@@ -90,6 +91,20 @@ impl ClientDevice for TdispVfioClientDevice {
         let resp = self.read_response(&command)?;
 
         tracing::info!("tdisp_command_to_host: response = {:?}", &resp);
+        if resp.tdi_state_after != resp.tdi_state_before {
+            tracing::info!(
+                "tdisp_command_to_host: TDI state transition performed, {:?} -> {:?}",
+                resp.tdi_state_before,
+                resp.tdi_state_after
+            );
+        } else {
+            tracing::info!("tdisp_command_to_host: No TDI state transition.");
+        }
+
+        if resp.tdi_state_after == TdispTdiState::Error {
+            tracing::error!("tdisp_command_to_host: TDI state transitioned to Error.");
+            return Err(anyhow::anyhow!("TDI state transitioned to Error."));
+        }
 
         Ok(resp)
     }
@@ -113,6 +128,18 @@ impl ClientDevice for TdispVfioClientDevice {
         match res {
             Ok(resp) => match resp.payload {
                 TdispCommandResponsePayload::GetDeviceInterfaceInfo(info) => Ok(info),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Bind the device to the current partition and transition to Locked.
+    fn tdisp_bind_interface(&self) -> anyhow::Result<()> {
+        let res = self.tdisp_command_no_args(TdispCommandId::Bind);
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::None => Ok(()),
                 _ => Err(anyhow::anyhow!("unexpected response payload")),
             },
             Err(e) => Err(e),
