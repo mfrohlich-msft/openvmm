@@ -4848,6 +4848,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "openhcl_tdisp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "inspect",
+ "openhcl_tdisp_resources",
+ "tdisp",
+ "tracing",
+]
+
+[[package]]
+name = "openhcl_tdisp_resources"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "inspect",
+ "tdisp",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6765,6 +6785,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tdisp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "inspect",
+ "parking_lot",
+ "thiserror 2.0.12",
+ "tracing",
+ "zerocopy 0.8.24",
+]
+
+[[package]]
 name = "tdx_guest_device"
 version = "0.0.0"
 dependencies = [
@@ -7748,6 +7780,8 @@ dependencies = [
  "inspect_counters",
  "libc",
  "mesh",
+ "openhcl_tdisp",
+ "openhcl_tdisp_resources",
  "pal_async",
  "pal_event",
  "parking_lot",
