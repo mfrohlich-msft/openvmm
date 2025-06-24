@@ -101,6 +101,8 @@ impl ClientDevice for TdispVfioClientDevice {
             tracing::info!("tdisp_command_to_host: No TDI state transition.");
         }
 
+        // [TDISP TODO] Ensure valid state transitions, take defensive approach to error handling.
+
         if resp.tdi_state_after == TdispTdiState::Error {
             tracing::error!("tdisp_command_to_host: TDI state transitioned to Error.");
             return Err(anyhow::anyhow!("TDI state transitioned to Error."));
