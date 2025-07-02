@@ -137,7 +137,8 @@ pub async fn relay_vpci_bus(
         },
         dma_client,
     )
-    .await?;
+    .await
+    .context("failed to open vpci channel")?;
     let (devices, mut devices_recv) = mesh::channel();
     let vpci_client =
         vpci_client::VpciClient::connect(driver_source.simple(), channel, mmio, devices).await?;
