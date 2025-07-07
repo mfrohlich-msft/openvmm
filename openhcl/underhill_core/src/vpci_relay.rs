@@ -15,6 +15,7 @@ use vmcore::save_restore::SaveRestore;
 use vmcore::save_restore::SavedStateNotSupported;
 use vmcore::vm_task::VmTaskDriverSource;
 use vmcore::vpci_msi::VpciInterruptMapper;
+use vmcore::vpci_msi::VpciTdispInterface;
 use vmotherboard::ChipsetBuilder;
 use vpci_client::MemoryAccess;
 use vpci_client::VpciDevice;
@@ -150,6 +151,15 @@ pub async fn relay_vpci_bus(
             .init()
             .await
             .context("failed to initialize vpci device")?,
+    );
+
+    let response_buffer = vpci_device
+        .send_tdisp_command(0x6, &[0x01, 0x02, 0x03, 0x04])
+        .await?;
+
+    tracing::error!(
+        command = 0x6,
+        response_buffer = format!("{:02x?}", response_buffer)
     );
 
     let device_name = format!("assigned_device:vpci-{instance_id}");

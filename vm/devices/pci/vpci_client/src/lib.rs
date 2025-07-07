@@ -26,6 +26,7 @@ use vmbus_ring::RingMem;
 use vmcore::vpci_msi::MapVpciInterrupt;
 use vmcore::vpci_msi::MsiAddressData;
 use vmcore::vpci_msi::RegisterInterruptError;
+use vmcore::vpci_msi::VpciTdispInterface;
 use vpci_protocol as protocol;
 use vpci_protocol::SlotNumber;
 use zerocopy::FromBytes;
@@ -52,6 +53,7 @@ enum WorkerRequest {
     UnmapInterrupt(FailableRpc<protocol::DeleteInterrupt, ()>),
     QueryResourceRequirements(FailableRpc<SlotNumber, protocol::QueryResourceRequirementsReply>),
     Init(FailableRpc<SlotNumber, ()>),
+    TdispCommand(FailableRpc<protocol::VpciTdispCommand, protocol::VpciTdispCommand>),
 }
 
 #[derive(Inspect)]
@@ -387,12 +389,57 @@ impl MapVpciInterrupt for VpciDevice {
             .req
             .call_failable(WorkerRequest::UnmapInterrupt, resource)
             .await
-            .unwrap_or_else(|err| {
+            .unwrap_or_else(|err: mesh::rpc::RpcError<mesh::error::RemoteError>| {
                 tracing::error!(
                     error = &err as &dyn std::error::Error,
                     "failed to unregister interrupt"
                 );
             });
+    }
+}
+
+impl VpciTdispInterface for VpciDevice {
+    /// Sends a TDISP command to the device through the VPCI channel.
+    async fn send_tdisp_command(
+        &self,
+        command: u32,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, anyhow::Error> {
+        // Copy the payload into a 128 byte local buffer for the command.
+
+        // [TDISP TODO] Validate the payload length.
+        if payload.len() > 128 {
+            return Err(anyhow::anyhow!("payload too large for tdisp command"));
+        }
+
+        let mut payload_buffer: [u8; 128] = [0; 128];
+        payload_buffer[..payload.len()].copy_from_slice(payload);
+
+        let res = self
+            .desc
+            .req
+            .call_failable(
+                WorkerRequest::TdispCommand,
+                protocol::VpciTdispCommand {
+                    message_type: protocol::MessageType::VPCI_TDISP_COMMAND,
+                    slot: self.desc.slot,
+                    command_id: command,
+                    data_length: payload.len() as u32,
+                    data: payload_buffer,
+                },
+            )
+            .await
+            .map_err(|err: mesh::rpc::RpcError<mesh::error::RemoteError>| {
+                tracing::error!(
+                    error = &err as &dyn std::error::Error,
+                    "failed to send tdisp command"
+                );
+                anyhow::anyhow!("failed to send tdisp command")
+            })?;
+
+        // Convert the payload reply into a Vec<u8>.
+        let reply = res.data;
+        Ok(Vec::from(reply))
     }
 }
 
@@ -420,6 +467,7 @@ enum Tx {
         #[inspect(skip)] FailableRpc<(), protocol::QueryResourceRequirementsReply>,
     ),
     AssignedResources(#[inspect(skip)] FailableRpc<(), ()>),
+    TdispCommand(#[inspect(skip)] FailableRpc<(), protocol::VpciTdispCommand>),
 }
 
 impl VpciClient {
@@ -447,6 +495,7 @@ impl VpciClient {
         // Start a transaction to move the bus to the D0 state. The completion
         // may come after the device list, so start the task and wait for the
         // reply afterwards.
+
         let (fdo_entry_send, fdo_entry_recv) = mesh::oneshot();
         let tx_id = index_to_tx_id(tx.insert(Tx::FdoD0Entry(fdo_entry_send)));
         conn.queue
@@ -592,6 +641,11 @@ impl<M: RingMem> VpciClientWorker<M> {
                             }
                             IncomingPacket::Completion(p) => {
                                 let tx_id = p.transaction_id();
+                                tracing::error!(
+                                    "[TDISP TODO] Received completion for tx_id {:x}",
+                                    tx_id
+                                );
+
                                 let entry = self
                                     .tx
                                     .try_remove(tx_id_to_index(tx_id))
@@ -603,6 +657,24 @@ impl<M: RingMem> VpciClientWorker<M> {
                                     .context("failed to read tx reply")?;
 
                                 match entry {
+                                    Tx::TdispCommand(rpc) => {
+                                        tracing::error!(
+                                            tx_id,
+                                            "[TDISP TODO] tdisp command reply received"
+                                        );
+
+                                        if status == protocol::Status::SUCCESS {
+                                            let reply = p
+                                                .reader()
+                                                .read_plain::<protocol::VpciTdispCommand>()
+                                                .context("failed to read tdisp command reply")?;
+                                            rpc.complete(Ok(reply));
+                                        } else {
+                                            rpc.fail(anyhow::anyhow!(
+                                                "failed to send tdisp command: {status:#x?}",
+                                            ));
+                                        }
+                                    }
                                     Tx::FdoD0Entry(send) => {
                                         tracing::trace!(
                                             tx_id,
@@ -693,6 +765,12 @@ impl<M: RingMem> VpciClientWorker<M> {
 
     async fn handle_req(&mut self, req: WorkerRequest) -> anyhow::Result<()> {
         match req {
+            WorkerRequest::TdispCommand(rpc) => {
+                let (req, reply) = rpc.split();
+                self.send_tx(Tx::TdispCommand(reply), req, &[])
+                    .await
+                    .context("failed to send tdisp command message")?;
+            }
             WorkerRequest::Inspect(deferred) => deferred.inspect(&mut *self),
             WorkerRequest::MapInterrupt(rpc) => {
                 let (req, reply) = rpc.split();
@@ -746,7 +824,7 @@ impl<M: RingMem> VpciClientWorker<M> {
     ) -> anyhow::Result<()> {
         let entry = self.tx.vacant_entry();
         let tx_id = index_to_tx_id(entry.key());
-        tracing::trace!(
+        tracing::error!(
             tx_id,
             message = std::any::type_name_of_val(&msg),
             "sending transaction"
