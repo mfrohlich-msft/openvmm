@@ -153,9 +153,9 @@ pub async fn relay_vpci_bus(
             .context("failed to initialize vpci device")?,
     );
 
-    let response_buffer = vpci_device
-        .send_tdisp_command(0x6, &[0x01, 0x02, 0x03, 0x04])
-        .await?;
+    let payload: Vec<u8> = Vec::from([0x01, 0x02, 0x03, 0x04]);
+
+    let response_buffer = vpci_device.send_tdisp_command(0x6, payload).await?;
 
     tracing::error!(
         command = 0x6,

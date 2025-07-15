@@ -380,7 +380,7 @@ pub struct FdoD0Entry {
 /// A TDISP packet being sent to the host.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, IntoBytes, Immutable, KnownLayout, FromBytes)]
-pub struct VpciTdispCommand {
+pub struct VpciTdispCommandHeader {
     /// Type of message (must be VPCI_TDISP_COMMAND)
     pub message_type: MessageType,
     /// PCI slot number of the target device
@@ -388,7 +388,13 @@ pub struct VpciTdispCommand {
     /// The command ID of the TDISP command to send
     pub command_id: u32,
     pub data_length: u32,
-    pub data: [u8; 128],
+    // pub data: [u8; data_length...],
+}
+
+#[derive(Debug, Clone)]
+pub struct VpciTdispCommand {
+    pub header: VpciTdispCommandHeader,
+    pub data: Vec<u8>,
 }
 
 /// Descriptor for a device resource.

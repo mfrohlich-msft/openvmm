@@ -48,7 +48,7 @@ pub trait VpciTdispInterface: Send + Sync {
     fn send_tdisp_command(
         &self,
         command: u32,
-        payload: &[u8],
+        payload: Vec<u8>,
     ) -> impl Future<Output = Result<Vec<u8>, anyhow::Error>> + Send;
 }
 

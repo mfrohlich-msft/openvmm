@@ -403,29 +403,22 @@ impl VpciTdispInterface for VpciDevice {
     async fn send_tdisp_command(
         &self,
         command: u32,
-        payload: &[u8],
+        payload: Vec<u8>,
     ) -> Result<Vec<u8>, anyhow::Error> {
-        // Copy the payload into a 128 byte local buffer for the command.
-
         // [TDISP TODO] Validate the payload length.
-        if payload.len() > 128 {
-            return Err(anyhow::anyhow!("payload too large for tdisp command"));
-        }
-
-        let mut payload_buffer: [u8; 128] = [0; 128];
-        payload_buffer[..payload.len()].copy_from_slice(payload);
-
         let res = self
             .desc
             .req
             .call_failable(
                 WorkerRequest::TdispCommand,
                 protocol::VpciTdispCommand {
-                    message_type: protocol::MessageType::VPCI_TDISP_COMMAND,
-                    slot: self.desc.slot,
-                    command_id: command,
-                    data_length: payload.len() as u32,
-                    data: payload_buffer,
+                    header: protocol::VpciTdispCommandHeader {
+                        message_type: protocol::MessageType::VPCI_TDISP_COMMAND,
+                        slot: self.desc.slot,
+                        command_id: command,
+                        data_length: payload.len() as u32,
+                    },
+                    data: payload,
                 },
             )
             .await
@@ -439,7 +432,7 @@ impl VpciTdispInterface for VpciDevice {
 
         // Convert the payload reply into a Vec<u8>.
         let reply = res.data;
-        Ok(Vec::from(reply))
+        Ok(reply)
     }
 }
 
@@ -641,10 +634,6 @@ impl<M: RingMem> VpciClientWorker<M> {
                             }
                             IncomingPacket::Completion(p) => {
                                 let tx_id = p.transaction_id();
-                                tracing::error!(
-                                    "[TDISP TODO] Received completion for tx_id {:x}",
-                                    tx_id
-                                );
 
                                 let entry = self
                                     .tx
@@ -660,15 +649,39 @@ impl<M: RingMem> VpciClientWorker<M> {
                                     Tx::TdispCommand(rpc) => {
                                         tracing::error!(
                                             tx_id,
+                                            status = ?status,
                                             "[TDISP TODO] tdisp command reply received"
                                         );
 
                                         if status == protocol::Status::SUCCESS {
-                                            let reply = p
-                                                .reader()
-                                                .read_plain::<protocol::VpciTdispCommand>()
-                                                .context("failed to read tdisp command reply")?;
-                                            rpc.complete(Ok(reply));
+                                            let mut reader = p.reader();
+
+                                            let header = reader
+                                                .read_plain::<protocol::VpciTdispCommandHeader>()
+                                                .context("failed to read tdisp command header")?;
+
+                                            let data_len = header.data_length as usize;
+
+                                            // Allocate a mutable vector with the correct size
+                                            let mut data: Vec<u8> = vec![0; data_len];
+
+                                            // Read data_len bytes from start_of_data into Vec
+                                            reader
+                                                .read(data.as_mut_slice())
+                                                .context("failed to read tdisp command data")?;
+
+                                            tracing::error!(
+                                                tx_id,
+                                                command_id = header.command_id,
+                                                data_length = data_len,
+                                                data = ?data,
+                                                "[TDISP TODO] Received tdisp command reply"
+                                            );
+
+                                            rpc.complete(Ok(protocol::VpciTdispCommand {
+                                                header,
+                                                data,
+                                            }));
                                         } else {
                                             rpc.fail(anyhow::anyhow!(
                                                 "failed to send tdisp command: {status:#x?}",
@@ -767,7 +780,7 @@ impl<M: RingMem> VpciClientWorker<M> {
         match req {
             WorkerRequest::TdispCommand(rpc) => {
                 let (req, reply) = rpc.split();
-                self.send_tx(Tx::TdispCommand(reply), req, &[])
+                self.send_tx(Tx::TdispCommand(reply), req.header, req.data.as_slice())
                     .await
                     .context("failed to send tdisp command message")?;
             }
