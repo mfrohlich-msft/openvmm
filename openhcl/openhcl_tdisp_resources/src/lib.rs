@@ -11,6 +11,7 @@
 //! See: `openhcl_tdisp` for more information.
 
 use inspect::Inspect;
+use std::future::Future;
 use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
@@ -54,4 +55,12 @@ impl RegisterTdisp for TestTdispRegisterNoOp {
     fn register(&mut self, _target: Arc<dyn tdisp::TdispHostDeviceTarget>) {
         todo!()
     }
+}
+
+/// [TDISP TODO] Move this somewhere else.
+pub trait VpciTdispInterface: Send + Sync {
+    fn send_tdisp_command(
+        &self,
+        payload: GuestToHostCommand,
+    ) -> impl Future<Output = Result<GuestToHostResponse, anyhow::Error>> + Send;
 }

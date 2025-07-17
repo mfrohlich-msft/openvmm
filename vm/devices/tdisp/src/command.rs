@@ -12,8 +12,6 @@ use zerocopy::KnownLayout;
 /// Represents a TDISP command sent from the guest to the host.
 #[derive(Debug, Copy, Clone)]
 pub struct GuestToHostCommand {
-    /// The GPA of the response page.
-    pub response_gpa: u64,
     /// Device ID of the target device.
     pub device_id: u64,
     /// The command ID.

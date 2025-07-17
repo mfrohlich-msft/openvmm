@@ -5,7 +5,10 @@ use chipset_device::pci::PciConfigSpace;
 use futures::StreamExt;
 use hcl::ioctl::MshvHvcall;
 use inspect::InspectMut;
+use openhcl_tdisp_resources::VpciTdispInterface;
 use std::sync::Arc;
+use tdisp::GuestToHostCommand;
+use tdisp::TdispCommandId;
 use user_driver::DmaClient;
 use vmbus_client::local_use::Input;
 use vmcore::device_state::ChangeDeviceState;
@@ -15,7 +18,6 @@ use vmcore::save_restore::SaveRestore;
 use vmcore::save_restore::SavedStateNotSupported;
 use vmcore::vm_task::VmTaskDriverSource;
 use vmcore::vpci_msi::VpciInterruptMapper;
-use vmcore::vpci_msi::VpciTdispInterface;
 use vmotherboard::ChipsetBuilder;
 use vpci_client::MemoryAccess;
 use vpci_client::VpciDevice;
@@ -153,13 +155,15 @@ pub async fn relay_vpci_bus(
             .context("failed to initialize vpci device")?,
     );
 
-    let payload: Vec<u8> = Vec::from([0x01, 0x02, 0x03, 0x04]);
-
-    let response_buffer = vpci_device.send_tdisp_command(0x6, payload).await?;
+    let request = GuestToHostCommand {
+        device_id: 0,
+        command_id: TdispCommandId::GetDeviceInterfaceInfo,
+    };
+    let response = vpci_device.send_tdisp_command(request).await?;
 
     tracing::error!(
         command = 0x6,
-        response_buffer = format!("{:02x?}", response_buffer)
+        response = ?response
     );
 
     let device_name = format!("assigned_device:vpci-{instance_id}");

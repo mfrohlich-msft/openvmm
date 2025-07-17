@@ -13,6 +13,8 @@
 #![allow(unused_variables)]
 #![allow(missing_docs)]
 
+use std::future::Future;
+
 use inspect::Inspect;
 use openhcl_tdisp_resources::ClientDevice;
 use tdisp::GuestToHostCommand;
@@ -82,7 +84,6 @@ impl ClientDevice for TdispOpenHclClientDevice {
     ) -> anyhow::Result<GuestToHostResponse> {
         self.tdisp_command_to_host(GuestToHostCommand {
             // Filled in later.
-            response_gpa: 0,
             device_id: 0,
             command_id,
         })

@@ -43,15 +43,6 @@ pub trait MapVpciInterrupt: Send + Sync {
     fn unregister_interrupt(&self, address: u64, data: u32) -> impl Future<Output = ()> + Send;
 }
 
-/// [TDISP TODO] Move this somewhere else.
-pub trait VpciTdispInterface: Send + Sync {
-    fn send_tdisp_command(
-        &self,
-        command: u32,
-        payload: Vec<u8>,
-    ) -> impl Future<Output = Result<Vec<u8>, anyhow::Error>> + Send;
-}
-
 #[async_trait]
 trait DynMapVpciInterrupt: Send + Sync {
     async fn register_interrupt(

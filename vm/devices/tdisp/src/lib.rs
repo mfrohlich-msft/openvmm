@@ -15,7 +15,8 @@
 // [TDISP TODO] Remove this once the TDISP interface is stable.
 #![allow(dead_code)]
 
-mod command;
+pub mod command;
+pub mod serialize;
 pub use command::{
     GuestToHostCommand, GuestToHostResponse, TdispCommandId, TdispCommandResponsePayload,
     TdispDeviceInterfaceInfo,
@@ -162,6 +163,31 @@ pub enum TdispTdiState {
     /// device is not functional and should be reset back to the TDI.Unlocked state with a
     /// TDISP.Unbind call.
     Error,
+}
+
+impl From<TdispTdiState> for u64 {
+    fn from(value: TdispTdiState) -> Self {
+        match value {
+            TdispTdiState::Uninitialized => 0,
+            TdispTdiState::Unlocked => 1,
+            TdispTdiState::Locked => 2,
+            TdispTdiState::Run => 3,
+            TdispTdiState::Error => 4,
+        }
+    }
+}
+
+impl From<u64> for TdispTdiState {
+    fn from(value: u64) -> Self {
+        match value {
+            0 => TdispTdiState::Uninitialized,
+            1 => TdispTdiState::Unlocked,
+            2 => TdispTdiState::Locked,
+            3 => TdispTdiState::Run,
+            4 => TdispTdiState::Error,
+            _ => TdispTdiState::Uninitialized,
+        }
+    }
 }
 
 /// The number of states to keep in the state history for debug.

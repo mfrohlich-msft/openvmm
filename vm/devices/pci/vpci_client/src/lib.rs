@@ -11,6 +11,7 @@ use inspect::Inspect;
 use inspect::InspectMut;
 use mesh::rpc::FailableRpc;
 use mesh::rpc::RpcSend;
+use openhcl_tdisp_resources::VpciTdispInterface;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
 use parking_lot::Mutex;
@@ -18,6 +19,9 @@ use pci_core::spec::cfg_space::Command;
 use pci_core::spec::cfg_space::HeaderType00;
 use pci_core::spec::hwid::HardwareIds;
 use std::sync::Arc;
+use tdisp::GuestToHostCommand;
+use tdisp::GuestToHostResponse;
+use tdisp::serialize::SerializePacket;
 use vmbus_async::queue::IncomingPacket;
 use vmbus_async::queue::OutgoingPacket;
 use vmbus_async::queue::Queue;
@@ -26,7 +30,6 @@ use vmbus_ring::RingMem;
 use vmcore::vpci_msi::MapVpciInterrupt;
 use vmcore::vpci_msi::MsiAddressData;
 use vmcore::vpci_msi::RegisterInterruptError;
-use vmcore::vpci_msi::VpciTdispInterface;
 use vpci_protocol as protocol;
 use vpci_protocol::SlotNumber;
 use zerocopy::FromBytes;
@@ -35,7 +38,6 @@ use zerocopy::Immutable;
 use zerocopy::IntoBytes;
 use zerocopy::KnownLayout;
 use zerocopy::Unalign;
-
 pub struct VpciClient {
     req: mesh::Sender<WorkerRequest>,
     task: Task<()>,
@@ -53,7 +55,7 @@ enum WorkerRequest {
     UnmapInterrupt(FailableRpc<protocol::DeleteInterrupt, ()>),
     QueryResourceRequirements(FailableRpc<SlotNumber, protocol::QueryResourceRequirementsReply>),
     Init(FailableRpc<SlotNumber, ()>),
-    TdispCommand(FailableRpc<protocol::VpciTdispCommand, protocol::VpciTdispCommand>),
+    TdispCommand(FailableRpc<protocol::VpciTdispCommand, GuestToHostResponse>),
 }
 
 #[derive(Inspect)]
@@ -402,9 +404,9 @@ impl VpciTdispInterface for VpciDevice {
     /// Sends a TDISP command to the device through the VPCI channel.
     async fn send_tdisp_command(
         &self,
-        command: u32,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>, anyhow::Error> {
+        payload: GuestToHostCommand,
+    ) -> Result<GuestToHostResponse, anyhow::Error> {
+        let serialized = payload.serialize_to_bytes();
         // [TDISP TODO] Validate the payload length.
         let res = self
             .desc
@@ -415,10 +417,9 @@ impl VpciTdispInterface for VpciDevice {
                     header: protocol::VpciTdispCommandHeader {
                         message_type: protocol::MessageType::VPCI_TDISP_COMMAND,
                         slot: self.desc.slot,
-                        command_id: command,
-                        data_length: payload.len() as u32,
+                        data_length: serialized.len() as u32,
                     },
-                    data: payload,
+                    data: serialized,
                 },
             )
             .await
@@ -430,9 +431,7 @@ impl VpciTdispInterface for VpciDevice {
                 anyhow::anyhow!("failed to send tdisp command")
             })?;
 
-        // Convert the payload reply into a Vec<u8>.
-        let reply = res.data;
-        Ok(reply)
+        Ok(res)
     }
 }
 
@@ -460,7 +459,7 @@ enum Tx {
         #[inspect(skip)] FailableRpc<(), protocol::QueryResourceRequirementsReply>,
     ),
     AssignedResources(#[inspect(skip)] FailableRpc<(), ()>),
-    TdispCommand(#[inspect(skip)] FailableRpc<(), protocol::VpciTdispCommand>),
+    TdispCommand(#[inspect(skip)] FailableRpc<(), GuestToHostResponse>),
 }
 
 impl VpciClient {
@@ -670,18 +669,23 @@ impl<M: RingMem> VpciClientWorker<M> {
                                                 .read(data.as_mut_slice())
                                                 .context("failed to read tdisp command data")?;
 
+                                            let host_response =
+                                                GuestToHostResponse::deserialize_from_bytes(
+                                                    data.as_slice(),
+                                                )
+                                                .context("failed to deserialize tdisp response");
+
                                             tracing::error!(
                                                 tx_id,
-                                                command_id = header.command_id,
                                                 data_length = data_len,
-                                                data = ?data,
+                                                host_response = ?host_response,
                                                 "[TDISP TODO] Received tdisp command reply"
                                             );
 
-                                            rpc.complete(Ok(protocol::VpciTdispCommand {
-                                                header,
-                                                data,
-                                            }));
+                                            rpc.complete(
+                                                host_response
+                                                    .map_err(mesh::error::RemoteError::new),
+                                            );
                                         } else {
                                             rpc.fail(anyhow::anyhow!(
                                                 "failed to send tdisp command: {status:#x?}",
