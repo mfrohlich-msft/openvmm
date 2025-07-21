@@ -385,7 +385,7 @@ pub struct VpciTdispCommandHeader {
     pub message_type: MessageType,
     /// PCI slot number of the target device
     pub slot: SlotNumber,
-    pub data_length: u32,
+    pub data_length: u64,
     // pub data: [u8; data_length...],
 }
 

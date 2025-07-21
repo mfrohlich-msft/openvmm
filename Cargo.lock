@@ -7466,6 +7466,7 @@ dependencies = [
  "nvme_resources",
  "openhcl_attestation_protocol",
  "openhcl_dma_manager",
+ "openhcl_tdisp",
  "openhcl_tdisp_resources",
  "pal",
  "pal_async",

@@ -9,6 +9,7 @@ use openhcl_tdisp_resources::VpciTdispInterface;
 use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::TdispCommandId;
+use tdisp::TdispGuestUnbindReason;
 use user_driver::DmaClient;
 use vmbus_client::local_use::Input;
 use vmcore::device_state::ChangeDeviceState;
@@ -155,16 +156,18 @@ pub async fn relay_vpci_bus(
             .context("failed to initialize vpci device")?,
     );
 
-    let request = GuestToHostCommand {
-        device_id: 0,
-        command_id: TdispCommandId::GetDeviceInterfaceInfo,
-    };
-    let response = vpci_device.send_tdisp_command(request).await?;
+    let res = vpci_device.tdisp_get_device_interface_info().await;
+    tracing::info!(msg = format!("tdisp_get_device_interface_info: {:?}", res));
 
-    tracing::error!(
-        command = 0x6,
-        response = ?response
-    );
+    if let Ok(_) = res {
+        let bind_res = vpci_device.tdisp_bind_interface().await;
+        tracing::info!(msg = format!("tdisp_bind_interface: {:?}", bind_res));
+    }
+
+    let unbind_res = vpci_device
+        .tdisp_unbind(TdispGuestUnbindReason::Graceful)
+        .await;
+    tracing::info!(msg = format!("tdisp_unbind: {:?}", unbind_res));
 
     let device_name = format!("assigned_device:vpci-{instance_id}");
     let device = chipset_builder

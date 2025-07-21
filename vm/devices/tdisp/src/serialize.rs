@@ -1,5 +1,6 @@
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, TryFromBytes};
 
+use crate::command::{TdispCommandRequestPayload, TdispCommandRequestUnbind};
 use crate::{GuestToHostCommand, GuestToHostResponse, TdispCommandResponsePayload};
 use crate::{TdispCommandId, TdispDeviceInterfaceInfo};
 
@@ -45,6 +46,7 @@ impl From<GuestToHostCommandSerializedHeader> for GuestToHostCommand {
         GuestToHostCommand {
             device_id: value.device_id,
             command_id: value.command_id.into(),
+            payload: TdispCommandRequestPayload::None,
         }
     }
 }
@@ -70,16 +72,51 @@ impl SerializePacket for GuestToHostCommand {
     fn serialize_to_bytes(&self) -> Vec<u8> {
         let header = GuestToHostCommandSerializedHeader::from(*self);
         let bytes = header.as_bytes();
-        bytes.to_vec()
+
+        let mut bytes = bytes.to_vec();
+        match self.payload {
+            TdispCommandRequestPayload::None => {}
+            TdispCommandRequestPayload::Unbind(info) => bytes.extend_from_slice(info.as_bytes()),
+        };
+
+        bytes
     }
 
     fn deserialize_from_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
+        let header_length = size_of::<GuestToHostCommandSerializedHeader>();
+        tracing::error!(msg = format!("deserialize_from_bytes: header_length={header_length}"));
+        tracing::error!(msg = format!("deserialize_from_bytes: {:?}", bytes));
+
+        let header_bytes = &bytes[0..header_length];
+        tracing::error!(msg = format!("deserialize_from_bytes: header_bytes={:?}", header_bytes));
+
         let header =
-            GuestToHostCommandSerializedHeader::try_read_from_bytes(bytes).map_err(|e| {
+            GuestToHostCommandSerializedHeader::try_ref_from_bytes(header_bytes).map_err(|e| {
                 anyhow::anyhow!("failed to deserialize GuestToHostCommand header: {:?}", e)
             })?;
 
-        Ok(header.into())
+        let payload_slice = &bytes[header_length..];
+
+        let mut packet: Self = header.to_owned().into();
+        let payload = match packet.command_id {
+            TdispCommandId::Unbind => TdispCommandRequestPayload::Unbind(
+                TdispCommandRequestUnbind::try_read_from_bytes(payload_slice).map_err(|e| {
+                    anyhow::anyhow!("failed to deserialize TdispCommandRequestUnbind: {:?}", e)
+                })?,
+            ),
+            TdispCommandId::Bind => TdispCommandRequestPayload::None,
+            TdispCommandId::GetDeviceInterfaceInfo => TdispCommandRequestPayload::None,
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unknown payload type for command id {:?} while serializing GuestToHostCommand",
+                    header.command_id
+                ));
+            }
+        };
+
+        packet.payload = payload;
+
+        Ok(packet)
     }
 }
 
@@ -119,6 +156,8 @@ impl SerializePacket for GuestToHostResponse {
                     })?,
                 )
             }
+            TdispCommandId::Bind => TdispCommandResponsePayload::None,
+            TdispCommandId::Unbind => TdispCommandResponsePayload::None,
             _ => {
                 return Err(anyhow::anyhow!(
                     "invalid payload type in GuestToHostResponse: {:?}",

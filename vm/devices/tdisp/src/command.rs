@@ -2,7 +2,9 @@
 // Licensed under the MIT License.
 
 use crate::TdispGuestOperationError;
+use crate::TdispGuestUnbindReason;
 use crate::TdispTdiState;
+use crate::TdispUnbindReason;
 use std::fmt::Display;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
@@ -16,6 +18,8 @@ pub struct GuestToHostCommand {
     pub device_id: u64,
     /// The command ID.
     pub command_id: TdispCommandId,
+    /// The payload of the command if it has one.
+    pub payload: TdispCommandRequestPayload,
 }
 
 /// Represents a response from a TDISP command sent to the host by a guest.
@@ -123,4 +127,19 @@ impl From<TdispDeviceInterfaceInfo> for TdispCommandResponsePayload {
     fn from(value: TdispDeviceInterfaceInfo) -> Self {
         TdispCommandResponsePayload::GetDeviceInterfaceInfo(value)
     }
+}
+
+/// Serialized to and from the payload field of a TdispCommandRequest
+#[derive(Debug, Copy, Clone)]
+pub enum TdispCommandRequestPayload {
+    /// No payload.
+    None,
+
+    /// TdispCommandId::Unbind
+    Unbind(TdispCommandRequestUnbind),
+}
+
+#[derive(Debug, Copy, Clone, FromBytes, IntoBytes, KnownLayout, Immutable)]
+pub struct TdispCommandRequestUnbind {
+    pub unbind_reason: u64,
 }

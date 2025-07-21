@@ -25,6 +25,8 @@ use inspect::Inspect;
 use parking_lot::Mutex;
 use thiserror::Error;
 
+use crate::command::TdispCommandRequestPayload;
+
 /// Major version of the TDISP guest-to-host interface.
 pub const TDISP_INTERFACE_VERSION_MAJOR: u32 = 1;
 
@@ -38,25 +40,44 @@ pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()
 pub trait TdispHostDeviceTarget: Send + Sync {
     /// [TDISP TODO] Highly subject to change as we work out the traits and semantics.
     fn tdisp_handle_guest_command(
-        &self,
+        &mut self,
         _command: GuestToHostCommand,
-    ) -> Result<GuestToHostResponse, String> {
+    ) -> anyhow::Result<GuestToHostResponse> {
         tracing::warn!("TdispHostDeviceTarget not implemented: tdisp_dispatch");
-        Err("TdispHostDeviceTarget not implemented: tdisp_dispatch".into())
+        anyhow::bail!("TdispHostDeviceTarget not implemented: tdisp_dispatch")
     }
 }
 
 /// An emulator which runs the TDISP state machine for a synthetic device.
 pub struct TdispHostDeviceTargetEmulator {
-    machine: Mutex<TdispHostStateMachine>,
+    machine: TdispHostStateMachine,
+    debug_device_id: String,
 }
 
 impl TdispHostDeviceTargetEmulator {
     /// Create a new emulator which runs the TDISP state machine for a synthetic device.
-    pub fn new(debug_device_id: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            machine: Mutex::new(TdispHostStateMachine::new(debug_device_id.to_owned())),
+            machine: TdispHostStateMachine::new(),
+            debug_device_id: "".to_owned(),
         }
+    }
+
+    /// Set the debug device ID string.
+    pub fn set_debug_device_id(&mut self, debug_device_id: &str) {
+        self.machine.set_debug_device_id(debug_device_id.to_owned());
+        self.debug_device_id = debug_device_id.to_owned();
+    }
+
+    /// Print a debug message to the log.
+    /// [TDISP TODO] Fix print type, make this accept a formatter instead.
+    fn debug_print(&self, msg: String) {
+        self.machine.debug_print(&msg);
+    }
+
+    /// Print an error message to the log.
+    fn error_print(&self, msg: String) {
+        self.machine.error_print(&msg);
     }
 
     /// Reset the emulator.
@@ -75,43 +96,55 @@ impl TdispHostDeviceTargetEmulator {
 
 impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
     fn tdisp_handle_guest_command(
-        &self,
+        &mut self,
         command: GuestToHostCommand,
-    ) -> Result<GuestToHostResponse, String> {
-        tracing::info!("tdisp_handle_guest_command: command = {:?}", command);
+    ) -> anyhow::Result<GuestToHostResponse> {
+        self.debug_print(format!(
+            "tdisp_handle_guest_command: command = {:?}",
+            command
+        ));
 
         let mut error = TdispGuestOperationError::Success;
         let mut payload = TdispCommandResponsePayload::None;
-        let mut locked_machine = self.machine.lock();
-        let state_before = locked_machine.state();
+        let state_before = self.machine.state();
         match command.command_id {
             TdispCommandId::GetDeviceInterfaceInfo => {
                 let interface_info = self.get_device_interface_info();
                 payload = TdispCommandResponsePayload::GetDeviceInterfaceInfo(interface_info);
             }
             TdispCommandId::Bind => {
-                let bind_res = locked_machine.request_lock_device_resources();
+                let bind_res = self.machine.request_lock_device_resources();
                 if let Err(err) = bind_res {
                     error = err;
                 } else {
                     payload = TdispCommandResponsePayload::None;
                 }
             }
-            TdispCommandId::GetTdiReport | TdispCommandId::StartTdi | TdispCommandId::Unbind => {
+            TdispCommandId::Unbind => {
+                let unbind_reason: TdispGuestUnbindReason = match command.payload {
+                    TdispCommandRequestPayload::Unbind(payload) => payload.unbind_reason.into(),
+                    _ => TdispGuestUnbindReason::Unknown,
+                };
+                let unbind_res = self.machine.request_unbind(unbind_reason);
+                if let Err(err) = unbind_res {
+                    error = err;
+                }
+            }
+            TdispCommandId::GetTdiReport | TdispCommandId::StartTdi => {
                 error = TdispGuestOperationError::NotImplemented;
             }
             TdispCommandId::Unknown => {
                 error = TdispGuestOperationError::InvalidGuestCommandId;
             }
         }
-        let state_after = locked_machine.state();
+        let state_after = self.machine.state();
 
         match error {
             TdispGuestOperationError::Success => {
-                tracing::info!("tdisp_handle_guest_command: Success");
+                self.debug_print("tdisp_handle_guest_command: Success".to_owned());
             }
             _ => {
-                tracing::error!("tdisp_handle_guest_command: Error: {:?}", error);
+                self.error_print(format!("tdisp_handle_guest_command: Error: {:?}", error));
             }
         }
 
@@ -123,7 +156,7 @@ impl TdispHostDeviceTarget for TdispHostDeviceTargetEmulator {
             payload,
         };
 
-        tracing::info!("tdisp_handle_guest_command: response = {:?}", resp);
+        self.debug_print(format!("tdisp_handle_guest_command: response = {:?}", resp));
 
         Ok(resp)
     }
@@ -158,11 +191,6 @@ pub enum TdispTdiState {
     /// resources have been mapped and accepted into the guest context. The device is ready to
     /// be used.
     Run,
-
-    /// `TDI.Error`` - The device has encountered an error and is in an indeterminate state. The
-    /// device is not functional and should be reset back to the TDI.Unlocked state with a
-    /// TDISP.Unbind call.
-    Error,
 }
 
 impl From<TdispTdiState> for u64 {
@@ -172,7 +200,6 @@ impl From<TdispTdiState> for u64 {
             TdispTdiState::Unlocked => 1,
             TdispTdiState::Locked => 2,
             TdispTdiState::Run => 3,
-            TdispTdiState::Error => 4,
         }
     }
 }
@@ -184,7 +211,6 @@ impl From<u64> for TdispTdiState {
             1 => TdispTdiState::Unlocked,
             2 => TdispTdiState::Locked,
             3 => TdispTdiState::Run,
-            4 => TdispTdiState::Error,
             _ => TdispTdiState::Uninitialized,
         }
     }
@@ -200,13 +226,10 @@ pub enum TdispUnbindReason {
     Unknown(anyhow::Error),
 
     /// The device was unbound manually by the guest or host for a non-error reason.
-    Graceful,
+    GuestInitiated(TdispGuestUnbindReason),
 
     /// The device attempted to perform an invalid state transition.
     ImpossibleStateTransition(anyhow::Error),
-
-    /// The device is recovering from the Error state.
-    RecoveringFromError,
 
     /// The guest tried to transition the device to the Locked state while the device was not
     /// in the Unlocked state.
@@ -226,6 +249,33 @@ pub enum TdispUnbindReason {
     InvalidGuestUnbindReason(anyhow::Error),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TdispGuestUnbindReason {
+    /// The guest requested to unbind the device for an unspecified reason.
+    Unknown,
+
+    /// The guest requested to unbind the device because the device is being detached.
+    Graceful,
+}
+
+impl From<TdispGuestUnbindReason> for u64 {
+    fn from(value: TdispGuestUnbindReason) -> Self {
+        match value {
+            TdispGuestUnbindReason::Unknown => 0,
+            TdispGuestUnbindReason::Graceful => 1,
+        }
+    }
+}
+
+impl From<u64> for TdispGuestUnbindReason {
+    fn from(value: u64) -> Self {
+        match value {
+            1 => TdispGuestUnbindReason::Graceful,
+            _ => TdispGuestUnbindReason::Unknown,
+        }
+    }
+}
+
 /// The state machine for the TDISP assignment flow for a device. Both the guest and host
 /// synchronize this state machine with each other as they move through the assignment flow.
 #[derive(Debug)]
@@ -242,23 +292,28 @@ pub struct TdispHostStateMachine {
 
 impl TdispHostStateMachine {
     /// Create a new TDISP state machine with the `Unlocked` state.
-    pub fn new(debug_device_id: String) -> Self {
+    pub fn new() -> Self {
         Self {
             current_state: TdispTdiState::Unlocked,
             state_history: Vec::new(),
-            debug_device_id,
+            debug_device_id: "".to_owned(),
             unbind_reason_history: Vec::new(),
         }
     }
 
+    /// Set the debug device ID string.
+    pub fn set_debug_device_id(&mut self, debug_device_id: String) {
+        self.debug_device_id = debug_device_id;
+    }
+
     /// Print a debug message to the log.
     fn debug_print(&self, msg: &str) {
-        tracing::debug!("[{}] {}", self.debug_device_id, msg);
+        tracing::error!(msg = format!("[TdispEmu] [{}] {}", self.debug_device_id, msg));
     }
 
     /// Print an error message to the log.
     fn error_print(&self, msg: &str) {
-        tracing::error!("[{}] {}", self.debug_device_id, msg);
+        tracing::error!(msg = format!("[TdispEmu] [{}] {}", self.debug_device_id, msg));
     }
 
     /// Get the current state of the TDI.
@@ -280,16 +335,6 @@ impl TdispHostStateMachine {
             (TdispTdiState::Locked, TdispTdiState::Unlocked) => true,
             (TdispTdiState::Unlocked, TdispTdiState::Unlocked) => true,
 
-            // Transitions to the Error state can occur at any time as long
-            // as progress has been made past the Unlocked state in the assignment flow.
-            // This happens at the firmware level and might be synchronized to this state after a TSM call.
-            (TdispTdiState::Locked, TdispTdiState::Error) => true,
-            (TdispTdiState::Run, TdispTdiState::Error) => true,
-
-            // The only way to recover from an Error state is to return
-            // to the Unlocked reset state.
-            (TdispTdiState::Error, TdispTdiState::Unlocked) => true,
-
             // Every other state transition is invalid
             _ => false,
         }
@@ -297,11 +342,8 @@ impl TdispHostStateMachine {
 
     /// Check if the guest unbind reason is valid. This is used for bookkeeping purposes to
     /// ensure the guest unbind reason recorded in the unbind history is valid.
-    fn is_valid_guest_unbind_reason(&self, reason: &TdispUnbindReason) -> bool {
-        matches!(
-            reason,
-            TdispUnbindReason::Graceful | TdispUnbindReason::RecoveringFromError
-        )
+    fn is_valid_guest_unbind_reason(&self, reason: &TdispGuestUnbindReason) -> bool {
+        !(matches!(reason, TdispGuestUnbindReason::Unknown))
     }
 
     /// Transitions the state machine to the new state if it is valid. If the new state is invalid,
@@ -356,21 +398,6 @@ impl TdispHostStateMachine {
             self.unbind_reason_history.remove(0);
         }
         self.unbind_reason_history.push(reason);
-    }
-
-    /// Transition the device from the `Error` state to `Unlocked` by resetting the state machine.
-    pub fn recover_from_error_state(&mut self) {
-        if self.current_state != TdispTdiState::Error {
-            self.error_print(
-                "Recovery from Error state called while device was not in Error state. Ignored.",
-            );
-
-            // If this is hit, keep the device in the Error state until a valid call transitions it to Unlocked.
-            return;
-        }
-
-        self.debug_print("Recovering from Error state");
-        self.unbind_all(TdispUnbindReason::RecoveringFromError);
     }
 }
 
@@ -448,14 +475,14 @@ pub trait TdispGuestRequestInterface {
     /// initiate an unbind for a variety of reasons:
     ///  - Device is being detached/deactivated and is no longer needed in a functional state
     ///  - Device is powering down or entering a reset
-    ///  - TDISP state machine synchronization is torn and needs to be reset to recover it
-    ///  - Device entered the Error state and needs to be recovered
     ///
     /// The device will transition to the `Unlocked` state. The guest can call
     /// this function at any time in any state to reset the device to the
     /// `Unlocked` state.
-    fn request_unbind(&mut self, reason: TdispUnbindReason)
-    -> Result<(), TdispGuestOperationError>;
+    fn request_unbind(
+        &mut self,
+        reason: TdispGuestUnbindReason,
+    ) -> Result<(), TdispGuestOperationError>;
 }
 
 impl TdispGuestRequestInterface for TdispHostStateMachine {
@@ -508,7 +535,7 @@ impl TdispGuestRequestInterface for TdispHostStateMachine {
 
     fn request_unbind(
         &mut self,
-        reason: TdispUnbindReason,
+        reason: TdispGuestUnbindReason,
     ) -> Result<(), TdispGuestOperationError> {
         // The guest can provide a reason for the unbind. If the unbind reason isn't valid for a guest (such as
         // if the guest says it is unbinding due to a host-related error), the reason is discarded and InvalidGuestUnbindReason
@@ -528,7 +555,7 @@ impl TdispGuestRequestInterface for TdispHostStateMachine {
             "Guest request to unbind succeeds while device is in {:?} (reason: {:?})",
             self.current_state, reason
         ));
-        self.unbind_all(reason);
+        self.unbind_all(TdispUnbindReason::GuestInitiated(reason));
         Ok(())
     }
 }

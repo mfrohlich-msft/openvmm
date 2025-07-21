@@ -16,23 +16,18 @@ use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 pub use tdisp::TdispCommandId;
+use tdisp::TdispGuestUnbindReason;
+use tdisp::TdispUnbindReason;
 pub use tdisp::{TDISP_INTERFACE_VERSION_MAJOR, TDISP_INTERFACE_VERSION_MINOR};
 
 /// Represents a TDISP device assigned to a guest partition. This trait allows
-/// the guest to send TDISP commands to the host through the backing hypercall
-/// interface.
+/// the guest to send TDISP commands to the host through the backing interface.
 /// [TDISP TODO] Change out `anyhow` for a `TdispError` type.
 pub trait ClientDevice: Send + Sync + Inspect {
-    /// Send a TDISP command to the host through backing hypercall interface.
+    /// Send a TDISP command to the host through the backing interface.
     fn tdisp_command_to_host(
         &self,
         command: GuestToHostCommand,
-    ) -> anyhow::Result<GuestToHostResponse>;
-
-    /// Send a TDISP command to the host through backing hypercall interface with no arguments.
-    fn tdisp_command_no_args(
-        &self,
-        command_id: TdispCommandId,
     ) -> anyhow::Result<GuestToHostResponse>;
 
     /// Checks if the device is TDISP capable and returns the device interface info if so.
@@ -57,10 +52,24 @@ impl RegisterTdisp for TestTdispRegisterNoOp {
     }
 }
 
-/// [TDISP TODO] Move this somewhere else.
 pub trait VpciTdispInterface: Send + Sync {
+    /// Sends a TDISP command to the device through the VPCI channel.
     fn send_tdisp_command(
         &self,
         payload: GuestToHostCommand,
     ) -> impl Future<Output = Result<GuestToHostResponse, anyhow::Error>> + Send;
+
+    /// Get the TDISP interface info for the device.
+    fn tdisp_get_device_interface_info(
+        &self,
+    ) -> impl Future<Output = anyhow::Result<tdisp::TdispDeviceInterfaceInfo>> + Send;
+
+    /// Request the device to bind to the current partition and transition to Locked.
+    fn tdisp_bind_interface(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Request to unbind the device and return to the Unlocked state.
+    fn tdisp_unbind(
+        &self,
+        reason: TdispGuestUnbindReason,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }

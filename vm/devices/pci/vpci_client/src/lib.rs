@@ -11,6 +11,7 @@ use inspect::Inspect;
 use inspect::InspectMut;
 use mesh::rpc::FailableRpc;
 use mesh::rpc::RpcSend;
+use openhcl_tdisp_resources::ClientDevice;
 use openhcl_tdisp_resources::VpciTdispInterface;
 use pal_async::task::Spawn;
 use pal_async::task::Task;
@@ -21,6 +22,12 @@ use pci_core::spec::hwid::HardwareIds;
 use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
+use tdisp::TdispCommandId;
+use tdisp::TdispCommandResponsePayload;
+use tdisp::TdispGuestUnbindReason;
+use tdisp::TdispUnbindReason;
+use tdisp::command::TdispCommandRequestPayload;
+use tdisp::command::TdispCommandRequestUnbind;
 use tdisp::serialize::SerializePacket;
 use vmbus_async::queue::IncomingPacket;
 use vmbus_async::queue::OutgoingPacket;
@@ -417,7 +424,7 @@ impl VpciTdispInterface for VpciDevice {
                     header: protocol::VpciTdispCommandHeader {
                         message_type: protocol::MessageType::VPCI_TDISP_COMMAND,
                         slot: self.desc.slot,
-                        data_length: serialized.len() as u32,
+                        data_length: serialized.len() as u64,
                     },
                     data: serialized,
                 },
@@ -432,6 +439,65 @@ impl VpciTdispInterface for VpciDevice {
             })?;
 
         Ok(res)
+    }
+
+    /// Get the device interface info.
+    async fn tdisp_get_device_interface_info(
+        &self,
+    ) -> anyhow::Result<tdisp::TdispDeviceInterfaceInfo> {
+        let res = self
+            .send_tdisp_command(GuestToHostCommand {
+                device_id: self.desc.slot.into_bits() as u64,
+                command_id: TdispCommandId::GetDeviceInterfaceInfo,
+                payload: TdispCommandRequestPayload::None,
+            })
+            .await;
+
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::GetDeviceInterfaceInfo(info) => Ok(info),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Bind the device to the current partition and transition to Locked.
+    async fn tdisp_bind_interface(&self) -> anyhow::Result<()> {
+        let res = self
+            .send_tdisp_command(GuestToHostCommand {
+                device_id: self.desc.slot.into_bits() as u64,
+                command_id: TdispCommandId::Bind,
+                payload: TdispCommandRequestPayload::None,
+            })
+            .await;
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::None => Ok(()),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Request to unbind the device and return to the Unlocked state.
+    async fn tdisp_unbind(&self, reason: TdispGuestUnbindReason) -> anyhow::Result<()> {
+        let res = self
+            .send_tdisp_command(GuestToHostCommand {
+                device_id: self.desc.slot.into_bits() as u64,
+                command_id: TdispCommandId::Unbind,
+                payload: TdispCommandRequestPayload::Unbind(TdispCommandRequestUnbind {
+                    unbind_reason: reason.into(),
+                }),
+            })
+            .await;
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::None => Ok(()),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
     }
 }
 
