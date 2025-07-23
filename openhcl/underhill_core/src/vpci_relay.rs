@@ -110,7 +110,7 @@ pub async fn relay_vpci_bus(
 ) -> anyhow::Result<()> {
     let instance_id = offer_info.offer.instance_id;
 
-    let mmio = if false {
+    let mmio = if true {
         let mshv_hvcall = MshvHvcall::new().context("failed to open mshv_hvcall device")?;
         mshv_hvcall.set_allowed_hypercalls(&[
             hvdef::HypercallCode::HvCallMemoryMappedIoRead,
