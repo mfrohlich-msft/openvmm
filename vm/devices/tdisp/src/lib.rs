@@ -17,6 +17,9 @@
 
 pub mod command;
 pub mod serialize;
+use std::sync::Arc;
+
+use anyhow::Context;
 pub use command::{
     GuestToHostCommand, GuestToHostResponse, TdispCommandId, TdispCommandResponsePayload,
     TdispDeviceInterfaceInfo,
@@ -35,6 +38,19 @@ pub const TDISP_INTERFACE_VERSION_MINOR: u32 = 0;
 
 /// Callback for receiving TDISP commands from the guest.
 pub type TdispCommandCallback = dyn Fn(&GuestToHostCommand) -> anyhow::Result<()> + Send + Sync;
+
+/// Trait used by the emulator to call back into the host.
+pub trait TdispHostDeviceInterface: Send + Sync {
+    /// Bind a tdi device to the current partition.
+    fn tdisp_bind(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Unbind a tdi device from the current partition.
+    fn tdisp_unbind(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
 
 /// Trait added to host VPCI devices to allow them to dispatch TDISP commands from guests.
 pub trait TdispHostDeviceTarget: Send + Sync {
@@ -56,9 +72,9 @@ pub struct TdispHostDeviceTargetEmulator {
 
 impl TdispHostDeviceTargetEmulator {
     /// Create a new emulator which runs the TDISP state machine for a synthetic device.
-    pub fn new() -> Self {
+    pub fn new(host_interface: Arc<Mutex<dyn TdispHostDeviceInterface>>) -> Self {
         Self {
-            machine: TdispHostStateMachine::new(),
+            machine: TdispHostStateMachine::new(host_interface),
             debug_device_id: "".to_owned(),
         }
     }
@@ -278,7 +294,6 @@ impl From<u64> for TdispGuestUnbindReason {
 
 /// The state machine for the TDISP assignment flow for a device. Both the guest and host
 /// synchronize this state machine with each other as they move through the assignment flow.
-#[derive(Debug)]
 pub struct TdispHostStateMachine {
     /// The current state of the TDISP device emulator.
     current_state: TdispTdiState,
@@ -288,16 +303,19 @@ pub struct TdispHostStateMachine {
     debug_device_id: String,
     /// A record of the last unbind reasons for the device.
     unbind_reason_history: Vec<TdispUnbindReason>,
+    /// Calls back into the host to perform TDISP actions.
+    host_interface: Arc<Mutex<dyn TdispHostDeviceInterface>>,
 }
 
 impl TdispHostStateMachine {
     /// Create a new TDISP state machine with the `Unlocked` state.
-    pub fn new() -> Self {
+    pub fn new(host_interface: Arc<Mutex<dyn TdispHostDeviceInterface>>) -> Self {
         Self {
             current_state: TdispTdiState::Unlocked,
             state_history: Vec::new(),
             debug_device_id: "".to_owned(),
             unbind_reason_history: Vec::new(),
+            host_interface,
         }
     }
 
@@ -381,7 +399,7 @@ impl TdispHostStateMachine {
     }
 
     /// Transition the device to the `Unlocked` state regardless of the current state.
-    fn unbind_all(&mut self, reason: TdispUnbindReason) {
+    fn unbind_all(&mut self, reason: TdispUnbindReason) -> anyhow::Result<()> {
         self.debug_print(&format!("Unbind called with reason {:?}", reason));
 
         // All states can be reset to the Unlocked state. This can only happen if the
@@ -393,11 +411,25 @@ impl TdispHostStateMachine {
             );
         }
 
+        // Call back into the host to bind the device.
+        let res = self
+            .host_interface
+            .lock()
+            .tdisp_unbind()
+            .context("host failed to unbind TDI");
+
+        if let Err(e) = res {
+            self.error_print(format!("Failed to unbind TDI: {:?}", e).as_str());
+            return Err(e);
+        }
+
         // Record the unbind reason
         if self.unbind_reason_history.len() == TDISP_STATE_HISTORY_LEN {
             self.unbind_reason_history.remove(0);
         }
         self.unbind_reason_history.push(reason);
+
+        Ok(())
     }
 }
 
@@ -413,8 +445,10 @@ pub enum TdispGuestOperationError {
     InvalidGuestUnbindReason,
     #[error("invalid TDI command ID")]
     InvalidGuestCommandId,
-    #[error("operation not implemented")]
+    #[error("operation requested was not implemented")]
     NotImplemented,
+    #[error("host failed to process command")]
+    HostFailedToProcessCommand,
 }
 
 impl From<TdispGuestOperationError> for u64 {
@@ -425,6 +459,7 @@ impl From<TdispGuestOperationError> for u64 {
             TdispGuestOperationError::InvalidGuestUnbindReason => 2,
             TdispGuestOperationError::InvalidGuestCommandId => 3,
             TdispGuestOperationError::NotImplemented => 4,
+            TdispGuestOperationError::HostFailedToProcessCommand => 5,
         }
     }
 }
@@ -437,7 +472,8 @@ impl From<u64> for TdispGuestOperationError {
             2 => TdispGuestOperationError::InvalidGuestUnbindReason,
             3 => TdispGuestOperationError::InvalidGuestCommandId,
             4 => TdispGuestOperationError::NotImplemented,
-            _ => panic!("invalid error code"),
+            5 => TdispGuestOperationError::HostFailedToProcessCommand,
+            _ => panic!("invalid TdispGuestOperationError code: {err}"),
         }
     }
 }
@@ -493,8 +529,26 @@ impl TdispGuestRequestInterface for TdispHostStateMachine {
             self.error_print(
                 "Unlocked to Locked state called while device was not in Unlocked state.",
             );
-            self.unbind_all(TdispUnbindReason::InvalidGuestTransitionToLocked);
+
+            self.unbind_all(TdispUnbindReason::InvalidGuestTransitionToLocked)
+                .map_err(|_| TdispGuestOperationError::HostFailedToProcessCommand)?;
             return Err(TdispGuestOperationError::InvalidDeviceState);
+        }
+
+        self.debug_print(
+            "Device bind requested, trying to transition from Unlocked to Locked state",
+        );
+
+        // Call back into the host to bind the device.
+        let res = self
+            .host_interface
+            .lock()
+            .tdisp_bind()
+            .context("failed to call to bind TDI");
+
+        if let Err(e) = res {
+            self.error_print(format!("Failed to bind TDI: {:?}", e).as_str());
+            return Err(TdispGuestOperationError::HostFailedToProcessCommand);
         }
 
         self.debug_print("Device transition from Unlocked to Locked state");
@@ -507,7 +561,9 @@ impl TdispGuestRequestInterface for TdispHostStateMachine {
             self.error_print(
                 "Retrieve attestation report called while device was not in Locked state.",
             );
-            self.unbind_all(TdispUnbindReason::InvalidGuestGetAttestationReportState);
+            self.unbind_all(TdispUnbindReason::InvalidGuestGetAttestationReportState)
+                .map_err(|_| TdispGuestOperationError::HostFailedToProcessCommand)?;
+
             return Err(TdispGuestOperationError::InvalidDeviceState);
         }
 
@@ -521,7 +577,9 @@ impl TdispGuestRequestInterface for TdispHostStateMachine {
             self.error_print(
                 "Accept attestation report called while device was not in Locked state.",
             );
-            self.unbind_all(TdispUnbindReason::InvalidGuestAcceptAttestationReportState);
+            self.unbind_all(TdispUnbindReason::InvalidGuestAcceptAttestationReportState)
+                .map_err(|_| TdispGuestOperationError::HostFailedToProcessCommand)?;
+
             return Err(TdispGuestOperationError::InvalidDeviceState);
         }
 
@@ -540,22 +598,24 @@ impl TdispGuestRequestInterface for TdispHostStateMachine {
         // The guest can provide a reason for the unbind. If the unbind reason isn't valid for a guest (such as
         // if the guest says it is unbinding due to a host-related error), the reason is discarded and InvalidGuestUnbindReason
         // is recorded in the unbind history.
-        if !self.is_valid_guest_unbind_reason(&reason) {
-            self.error_print(&format!(
-                "Invalid guest unbind reason {:?} requested",
-                reason
-            ));
-            self.unbind_all(TdispUnbindReason::InvalidGuestUnbindReason(
-                anyhow::anyhow!("Invalid guest unbind reason {:?} requested", reason),
-            ));
-            return Err(TdispGuestOperationError::InvalidGuestUnbindReason);
-        }
+        let reason = if !self.is_valid_guest_unbind_reason(&reason) {
+            let error_txt = format!("Invalid guest unbind reason {:?} requested", reason);
+
+            self.error_print(error_txt.as_str());
+
+            TdispUnbindReason::InvalidGuestUnbindReason(anyhow::anyhow!(error_txt))
+        } else {
+            TdispUnbindReason::GuestInitiated(reason)
+        };
 
         self.debug_print(&format!(
             "Guest request to unbind succeeds while device is in {:?} (reason: {:?})",
             self.current_state, reason
         ));
-        self.unbind_all(TdispUnbindReason::GuestInitiated(reason));
+
+        self.unbind_all(reason)
+            .map_err(|_| TdispGuestOperationError::HostFailedToProcessCommand)?;
+
         Ok(())
     }
 }

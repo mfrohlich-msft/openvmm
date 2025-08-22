@@ -2,9 +2,7 @@
 // Licensed under the MIT License.
 
 use crate::TdispGuestOperationError;
-use crate::TdispGuestUnbindReason;
 use crate::TdispTdiState;
-use crate::TdispUnbindReason;
 use std::fmt::Display;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
