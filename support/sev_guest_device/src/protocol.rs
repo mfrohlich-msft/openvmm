@@ -40,6 +40,30 @@ pub struct VmmErrorCode {
     pub vmm_error: u32,
 }
 
+#[repr(C)]
+pub struct TioGuestRequestIoctl {
+    /// Message version number (must be non-zero).
+    pub msg_version: u32,
+    /// Request struct address.
+    pub req_data: u64,
+    /// Response struct address.
+    pub resp_data: u64,
+    /// VMM error code.
+    pub exitinfo: VmmErrorCode,
+    /// [TDISP TODO] Exitinfo1
+    pub exitinfo1: u64,
+    /// [TDISP TODO] tio_msg type
+    pub msg_type: u64,
+    /// [TDISP TODO] req_size
+    pub req_size: u64,
+    /// [TDISP TODO] resp_size
+    pub resp_size: u64,
+    /// [TDISP TODO] pci_id
+    pub pci_id: u64,
+    /// [TDISP TODO] additional_arg / additional_arg
+    pub additional_arg: u64,
+}
+
 /// Request structure for the `SNP_GET_REPORT` ioctl.
 /// See `MSG_REPORT_REQ` in Table 21, "SEV Secure Nested Paging Firmware ABI specification", Revision 1.55.
 #[repr(C)]
@@ -203,6 +227,49 @@ pub struct SnpDerivedKeyReq {
     /// exceed CommittedTcb.
     pub tcb_version: u64,
 }
+
+/// See `TIO_MSG_TDI_INFO_REQ` in Table 60, "SEV-TIO Firmware Interface Specification", Revision 0.91.
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct TioMsgTdiInfoReq {
+    /// Hypervisor supplied guest id.
+    pub guest_device_id: u16,
+    /// Reserved
+    pub _reserved0: [u8; 14],
+}
+
+static_assertions::const_assert_eq!(16, size_of::<TioMsgTdiInfoReq>());
+
+/// See `TIO_MSG_TDI_INFO_RSP` in Table 61, "SEV-TIO Firmware Interface Specification", Revision 0.91.
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct TioMsgTdiInfoRsp {
+    /// Hypervisor supplied guest id.
+    pub guest_device_id: u16,
+    /// TDI status.
+    pub tdi_status: u16,
+    /// Reserved
+    pub _reserved0: [u8; 12],
+    /// MEAS_DIGEST info
+    pub meas_digest_info: u32,
+    /// Device lock flags
+    pub lock_flags: u32,
+    /// SPDM algorithms
+    pub spdm_algos: u64,
+    /// Certs digest
+    pub certs_digest: [u8; 48],
+    /// MEAS digest
+    pub meas_digest: [u8; 48],
+    /// Interface report digest
+    pub interface_report_digest: [u8; 48],
+    /// Tdi report count
+    pub tdi_report_count: u64,
+    /// Reserved
+    pub _reserved1: u64,
+}
+
+// Assert the size of the response field
+static_assertions::const_assert_eq!(192, size_of::<TioMsgTdiInfoRsp>());
 
 /// Indicate which guest-selectable fields will be mixed into the key.
 /// See `GUEST_FIELD_SELECT` in Table 19, "SEV Secure Nested Paging Firmware ABI specification", Revision 1.55.

@@ -22,6 +22,8 @@ pub enum Error {
     SnpGetReportIoctl(#[source] nix::Error),
     #[error("SNP_GET_DERIVED_KEY ioctl failed")]
     SnpGetDerivedKeyIoctl(#[source] nix::Error),
+    #[error("TIO_GUEST_REQUEST ioctl failed")]
+    TioGuestRequestIoctl(#[source] nix::Error),
 }
 
 nix::ioctl_readwrite!(
@@ -29,7 +31,8 @@ nix::ioctl_readwrite!(
     snp_get_report,
     protocol::SNP_GUEST_REQ_IOC_TYPE,
     0x0,
-    protocol::SnpGuestRequestIoctl
+    // [TDISP TODO] Change this back since this is hacked to be a different struct right now.
+    protocol::TioGuestRequestIoctl
 );
 
 nix::ioctl_readwrite!(
@@ -37,7 +40,17 @@ nix::ioctl_readwrite!(
     snp_get_derived_key,
     protocol::SNP_GUEST_REQ_IOC_TYPE,
     0x1,
-    protocol::SnpGuestRequestIoctl
+// [TDISP TODO] Change this back since this is hacked to be a different struct right now.
+    protocol::TioGuestRequestIoctl
+);
+
+nix::ioctl_readwrite!(
+    /// `TIO_GUEST_REQUEST` ioctl defined by Linux.
+    tio_guest_request,
+    protocol::SNP_GUEST_REQ_IOC_TYPE,
+    0x3,
+    // [TDISP TODO] Use proper interface for this.
+    protocol::TioGuestRequestIoctl
 );
 
 /// Abstraction of the /dev/sev-guest device.
@@ -67,11 +80,17 @@ impl SevGuestDevice {
 
         let resp = protocol::SnpReportResp::new_zeroed();
 
-        let mut snp_guest_request = protocol::SnpGuestRequestIoctl {
+        let mut snp_guest_request = protocol::TioGuestRequestIoctl {
             msg_version: protocol::SNP_GUEST_REQ_MSG_VERSION,
             req_data: req.as_bytes().as_ptr() as u64,
             resp_data: resp.as_bytes().as_ptr() as u64,
             exitinfo: protocol::VmmErrorCode::new_zeroed(),
+            exitinfo1: 0,
+            msg_type: 0,
+            req_size: 0,
+            resp_size: 0,
+            pci_id: 0,
+            additional_arg: 0,
         };
 
         // SAFETY: Make SNP_GET_REPORT ioctl call to the device with correct types.
@@ -103,11 +122,17 @@ impl SevGuestDevice {
 
         let resp = protocol::SnpDerivedKeyResp::new_zeroed();
 
-        let mut snp_guest_request = protocol::SnpGuestRequestIoctl {
+        let mut snp_guest_request = protocol::TioGuestRequestIoctl {
             msg_version: protocol::SNP_GUEST_REQ_MSG_VERSION,
             req_data: req.as_bytes().as_ptr() as u64,
             resp_data: resp.as_bytes().as_ptr() as u64,
             exitinfo: protocol::VmmErrorCode::new_zeroed(),
+            exitinfo1: 0,
+            msg_type: 0,
+            req_size: 0,
+            resp_size: 0,
+            pci_id: 0,
+            additional_arg: 0,
         };
 
         // SAFETY: Make SNP_GET_DERIVED_KEY ioctl call to the device with correct types
@@ -117,5 +142,47 @@ impl SevGuestDevice {
         }
 
         Ok(resp.derived_key)
+    }
+
+    /// Invoke the `TIO_GUEST_REQUEST` ioctl via the device.
+    pub fn tio_guest_request(&mut self) -> Result<(), Error> {
+        let req = protocol::TioMsgTdiInfoReq {
+            guest_device_id: 0,
+            _reserved0: [0; 14],
+        };
+
+        let resp = protocol::TioMsgTdiInfoRsp::new_zeroed();
+
+        let msg_type = 19; // TIO_MSG_TDI_INFO_REQ
+        tracing::info!(
+            msg = "Issuing TIO_GUEST_REQUEST ioctl with value guest device 0x1 (msg_type = {:?})",
+            msg_type
+        );
+        let mut snp_guest_request = protocol::TioGuestRequestIoctl {
+            msg_version: protocol::SNP_GUEST_REQ_MSG_VERSION,
+            req_data: req.as_bytes().as_ptr() as u64,
+            resp_data: resp.as_bytes().as_ptr() as u64,
+            exitinfo: protocol::VmmErrorCode::new_zeroed(),
+            exitinfo1: 0,
+            msg_type, // TIO_MSG_TDI_INFO_REQ
+            req_size: req.as_bytes().len() as u64,
+            resp_size: resp.as_bytes().len() as u64,
+            pci_id: 1, // TODO: Get the actual guest ID from the host
+            additional_arg: 0,
+        };
+
+        // SAFETY: Make TIO_GUEST_REQUEST ioctl call to the device with correct types
+        unsafe {
+            tio_guest_request(self.file.as_raw_fd(), &mut snp_guest_request)
+                .map_err(Error::TioGuestRequestIoctl)?;
+        }
+
+        tracing::info!(
+            msg = "TIO_GUEST_REQUEST ioctl completed, guest_device_id = {:?}, tdi_status = {:?}",
+            resp.guest_device_id,
+            resp.tdi_status
+        );
+
+        Ok(())
     }
 }

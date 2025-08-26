@@ -164,6 +164,16 @@ pub async fn relay_vpci_bus(
         tracing::info!(msg = format!("tdisp_bind_interface: {:?}", bind_res));
     }
 
+    {
+        tracing::info!(msg = "Issuing GHCB call to test TIO_GUEST_REQUEST ioctl");
+        let mut dev = sev_guest_device::ioctl::SevGuestDevice::open()
+            .context("failed to open /dev/sev-guest")?;
+        tracing::info!(msg = "Opened /dev/sev-guest");
+        dev.tio_guest_request()
+            .context("failed to issue TIO_GUEST_REQUEST ioctl")?;
+        tracing::info!(msg = "Issued GHCB call to test TIO_GUEST_REQUEST ioctl");
+    }
+
     let unbind_res = vpci_device
         .tdisp_unbind(TdispGuestUnbindReason::Graceful)
         .await;
