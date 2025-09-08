@@ -1,7 +1,13 @@
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, TryFromBytes};
 
-use crate::command::{TdispCommandRequestPayload, TdispCommandRequestUnbind};
-use crate::{GuestToHostCommand, GuestToHostResponse, TdispCommandResponsePayload};
+use crate::command::{
+    TdispCommandRequestGetTdiReport, TdispCommandRequestPayload, TdispCommandRequestUnbind,
+    TdispCommandResponseGetTdiReport, TdispSerializedCommandRequestGetTdiReport,
+};
+use crate::{
+    GuestToHostCommand, GuestToHostResponse, TdispCommandResponsePayload, TdispDeviceReport,
+    TdispDeviceReportType, TdispGuestOperationError, TdispTdiReport,
+};
 use crate::{TdispCommandId, TdispDeviceInterfaceInfo};
 
 /// Serialized form of the header for a GuestToHostCommand packet
@@ -21,8 +27,8 @@ pub struct GuestToHostResponseSerializedHeader {
 }
 
 // [TDISP TODO] There's probably a better way to do these conversions.
-impl From<GuestToHostCommand> for GuestToHostCommandSerializedHeader {
-    fn from(value: GuestToHostCommand) -> Self {
+impl From<&GuestToHostCommand> for GuestToHostCommandSerializedHeader {
+    fn from(value: &GuestToHostCommand) -> Self {
         GuestToHostCommandSerializedHeader {
             device_id: value.device_id,
             command_id: value.command_id.into(),
@@ -30,8 +36,8 @@ impl From<GuestToHostCommand> for GuestToHostCommandSerializedHeader {
     }
 }
 
-impl From<GuestToHostResponse> for GuestToHostResponseSerializedHeader {
-    fn from(value: GuestToHostResponse) -> Self {
+impl From<&GuestToHostResponse> for GuestToHostResponseSerializedHeader {
+    fn from(value: &GuestToHostResponse) -> Self {
         GuestToHostResponseSerializedHeader {
             command_id: value.command_id.into(),
             result: value.result.into(),
@@ -41,8 +47,8 @@ impl From<GuestToHostResponse> for GuestToHostResponseSerializedHeader {
     }
 }
 
-impl From<GuestToHostCommandSerializedHeader> for GuestToHostCommand {
-    fn from(value: GuestToHostCommandSerializedHeader) -> Self {
+impl From<&GuestToHostCommandSerializedHeader> for GuestToHostCommand {
+    fn from(value: &GuestToHostCommandSerializedHeader) -> Self {
         GuestToHostCommand {
             device_id: value.device_id,
             command_id: value.command_id.into(),
@@ -51,8 +57,8 @@ impl From<GuestToHostCommandSerializedHeader> for GuestToHostCommand {
     }
 }
 
-impl From<GuestToHostResponseSerializedHeader> for GuestToHostResponse {
-    fn from(value: GuestToHostResponseSerializedHeader) -> Self {
+impl From<&GuestToHostResponseSerializedHeader> for GuestToHostResponse {
+    fn from(value: &GuestToHostResponseSerializedHeader) -> Self {
         GuestToHostResponse {
             command_id: value.command_id.into(),
             result: value.result.into(),
@@ -62,21 +68,23 @@ impl From<GuestToHostResponseSerializedHeader> for GuestToHostResponse {
         }
     }
 }
-
 pub trait SerializePacket: Sized {
-    fn serialize_to_bytes(&self) -> Vec<u8>;
+    fn serialize_to_bytes(self) -> Vec<u8>;
     fn deserialize_from_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error>;
 }
 
 impl SerializePacket for GuestToHostCommand {
-    fn serialize_to_bytes(&self) -> Vec<u8> {
-        let header = GuestToHostCommandSerializedHeader::from(*self);
+    fn serialize_to_bytes(self) -> Vec<u8> {
+        let header = GuestToHostCommandSerializedHeader::from(&self);
         let bytes = header.as_bytes();
 
         let mut bytes = bytes.to_vec();
         match self.payload {
             TdispCommandRequestPayload::None => {}
             TdispCommandRequestPayload::Unbind(info) => bytes.extend_from_slice(info.as_bytes()),
+            TdispCommandRequestPayload::GetTdiReport(info) => {
+                bytes.extend_from_slice(info.as_bytes())
+            }
         };
 
         bytes
@@ -97,7 +105,7 @@ impl SerializePacket for GuestToHostCommand {
 
         let payload_slice = &bytes[header_length..];
 
-        let mut packet: Self = header.to_owned().into();
+        let mut packet: Self = header.into();
         let payload = match packet.command_id {
             TdispCommandId::Unbind => TdispCommandRequestPayload::Unbind(
                 TdispCommandRequestUnbind::try_read_from_bytes(payload_slice).map_err(|e| {
@@ -106,9 +114,20 @@ impl SerializePacket for GuestToHostCommand {
             ),
             TdispCommandId::Bind => TdispCommandRequestPayload::None,
             TdispCommandId::GetDeviceInterfaceInfo => TdispCommandRequestPayload::None,
-            _ => {
+            TdispCommandId::StartTdi => TdispCommandRequestPayload::None,
+            TdispCommandId::GetTdiReport => TdispCommandRequestPayload::GetTdiReport(
+                TdispCommandRequestGetTdiReport::try_read_from_bytes(payload_slice).map_err(
+                    |e| {
+                        anyhow::anyhow!(
+                            "failed to deserialize TdispCommandRequestGetTdiReport: {:?}",
+                            e
+                        )
+                    },
+                )?,
+            ),
+            TdispCommandId::Unknown => {
                 return Err(anyhow::anyhow!(
-                    "Unknown payload type for command id {:?} while serializing GuestToHostCommand",
+                    "Unknown payload type for command id {:?} while deserializing GuestToHostCommand",
                     header.command_id
                 ));
             }
@@ -121,8 +140,8 @@ impl SerializePacket for GuestToHostCommand {
 }
 
 impl SerializePacket for GuestToHostResponse {
-    fn serialize_to_bytes(&self) -> Vec<u8> {
-        let header = GuestToHostResponseSerializedHeader::from(*self);
+    fn serialize_to_bytes(self) -> Vec<u8> {
+        let header = GuestToHostResponseSerializedHeader::from(&self);
         let bytes = header.as_bytes();
 
         let mut bytes = bytes.to_vec();
@@ -130,6 +149,15 @@ impl SerializePacket for GuestToHostResponse {
             TdispCommandResponsePayload::None => {}
             TdispCommandResponsePayload::GetDeviceInterfaceInfo(info) => {
                 bytes.extend_from_slice(info.as_bytes())
+            }
+            TdispCommandResponsePayload::GetTdiReport(info) => {
+                let header = TdispSerializedCommandRequestGetTdiReport {
+                    report_type: info.report_type,
+                    report_buffer_size: info.report_buffer.len() as u32,
+                };
+
+                bytes.extend_from_slice(header.as_bytes());
+                bytes.extend_from_slice(info.report_buffer.as_bytes());
             }
         };
 
@@ -145,9 +173,18 @@ impl SerializePacket for GuestToHostResponse {
                     anyhow::anyhow!("failed to deserialize GuestToHostResponse header: {:?}", e)
                 })?;
 
+        let mut packet: Self = header.into();
+
+        // If the result is not success, then we don't need to deserialize the payload.
+        match packet.result {
+            TdispGuestOperationError::Success => {}
+            _ => {
+                return Ok(packet);
+            }
+        }
+
         let payload_slice = &bytes[header_length..];
 
-        let mut packet: Self = header.to_owned().into();
         let payload = match packet.command_id {
             TdispCommandId::GetDeviceInterfaceInfo => {
                 TdispCommandResponsePayload::GetDeviceInterfaceInfo(
@@ -158,7 +195,35 @@ impl SerializePacket for GuestToHostResponse {
             }
             TdispCommandId::Bind => TdispCommandResponsePayload::None,
             TdispCommandId::Unbind => TdispCommandResponsePayload::None,
-            _ => {
+            TdispCommandId::StartTdi => TdispCommandResponsePayload::None,
+            TdispCommandId::GetTdiReport => {
+                // Peel off the header from the payload
+                let payload_header_len = size_of::<TdispSerializedCommandRequestGetTdiReport>();
+                let payload_header_slice = &payload_slice[0..payload_header_len];
+
+                // Read the header
+                let payload_header =
+                    TdispSerializedCommandRequestGetTdiReport::try_read_from_bytes(
+                        payload_header_slice,
+                    )
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "failed to deserialize TdispSerializedCommandRequestGetTdiReport: {:?}",
+                            e
+                        )
+                    })?;
+
+                // Determine the number of bytes to read from the payload for the report buffer
+                let payload_bytes = &payload_slice[payload_header_len
+                    ..(payload_header_len + payload_header.report_buffer_size as usize)];
+
+                // Convert this to the response type
+                TdispCommandResponsePayload::GetTdiReport(TdispCommandResponseGetTdiReport {
+                    report_type: payload_header.report_type,
+                    report_buffer: payload_bytes.to_vec(),
+                })
+            }
+            TdispCommandId::Unknown => {
                 return Err(anyhow::anyhow!(
                     "invalid payload type in GuestToHostResponse: {:?}",
                     header.result

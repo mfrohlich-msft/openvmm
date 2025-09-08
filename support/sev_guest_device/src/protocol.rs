@@ -49,9 +49,9 @@ pub struct TioGuestRequestIoctl {
     /// Response struct address.
     pub resp_data: u64,
     /// VMM error code.
-    pub exitinfo: VmmErrorCode,
+    pub exitinfo1: VmmErrorCode,
     /// [TDISP TODO] Exitinfo1
-    pub exitinfo1: u64,
+    pub exitinfo2: u64,
     /// [TDISP TODO] tio_msg type
     pub msg_type: u64,
     /// [TDISP TODO] req_size
@@ -230,7 +230,7 @@ pub struct SnpDerivedKeyReq {
 
 /// See `TIO_MSG_TDI_INFO_REQ` in Table 60, "SEV-TIO Firmware Interface Specification", Revision 0.91.
 #[repr(C)]
-#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
 pub struct TioMsgTdiInfoReq {
     /// Hypervisor supplied guest id.
     pub guest_device_id: u16,
@@ -242,7 +242,7 @@ static_assertions::const_assert_eq!(16, size_of::<TioMsgTdiInfoReq>());
 
 /// See `TIO_MSG_TDI_INFO_RSP` in Table 61, "SEV-TIO Firmware Interface Specification", Revision 0.91.
 #[repr(C)]
-#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
 pub struct TioMsgTdiInfoRsp {
     /// Hypervisor supplied guest id.
     pub guest_device_id: u16,
@@ -270,6 +270,130 @@ pub struct TioMsgTdiInfoRsp {
 
 // Assert the size of the response field
 static_assertions::const_assert_eq!(192, size_of::<TioMsgTdiInfoRsp>());
+
+/// See `TIO_MSG_MMIO_VALIDATE_REQ` in Table 63, "SEV-TIO Firmware Interface Specification", Revision 0.91.
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+pub struct TioMsgMmioValidateReq {
+    /// Hypervisor provided identifier used by the guest to identify the TDI in guest messages.
+    pub guest_device_id: u16,
+    /// Reserved.
+    pub _reserved0: [u8; 14],
+    /// Guest physical address of the subrange.
+    pub subrange_base: u64,
+    /// Number of 4 KB pages in the subrange.
+    pub subrange_page_count: u32,
+    /// Offset of the subrange within the MMIO range.
+    pub range_offset: u32,
+    /// Validated flags
+    pub validated_flags: u16,
+    /// RangeID of MMIO range.
+    pub range_id: u16,
+    /// Reserved.
+    pub _reserved2: [u8; 12],
+}
+
+// Assert the size of the structure
+static_assertions::const_assert_eq!(48, size_of::<TioMsgMmioValidateReq>());
+
+/// See `TIO_MSG_MMIO_VALIDATE_RSP` in Table 64, "SEV-TIO Firmware Interface Specification", Revision 0.91.
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+pub struct TioMsgMmioValidateRsp {
+    /// Hypervisor provided PCIe Routing ID used by the guest to identify the TDI.
+    pub guest_device_id: u16,
+    /// Status of the operation.
+    pub status: u16,
+    /// Reserved.
+    pub _reserved0: [u8; 12],
+    /// Guest physical address of the subrange.
+    pub subrange_base: u64,
+    /// Number of 4 KB pages in the subrange.
+    pub subrange_page_count: u32,
+    /// Offset of the subrange within the MMIO range.
+    pub range_offset: u32,
+    /// Validated flags
+    pub flag_bits: u16,
+    /// Range of the MMIO.
+    pub range_id: u16,
+    /// Reserved.
+    pub _reserved2: [u8; 12],
+}
+
+// Assert the size of the structure
+static_assertions::const_assert_eq!(48, size_of::<TioMsgMmioValidateRsp>());
+
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+pub struct TioMsgMmioConfigReq {
+    /// Hypervisor provided identifier used by the guest to identify the TDI in guest messages.
+    pub guest_device_id: u16,
+    /// Reserved.
+    pub _reserved0: [u8; 2],
+    /// Flags for the range.
+    pub flags: u16,
+    /// Range ID of the MMIO range.
+    pub range_id: u16,
+    /// WRITE flag.
+    pub write: u32,
+    /// Reserved.
+    pub _reserved2: [u8; 4],
+}
+
+impl TioMsgMmioConfigReq {
+    /// 0: Can be mapped only into guest private
+    /// memory.
+    /// 1: Can be mapped into either guest
+    /// private memory or shared memory.
+    /// Ignored if WRITE is 0.
+    pub fn is_non_tee_mem(&self) -> bool {
+        (self.flags & (1 << 2)) != 0
+    }
+}
+
+static_assertions::const_assert_eq!(16, size_of::<TioMsgMmioConfigReq>());
+
+/// See `TIO_MSG_MMIO_CONFIG_RSP` in Table 66, "SEV-TIO Firmware Interface Specification", Revision 0.91.
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+pub struct TioMsgMmioConfigRsp {
+    /// Hypervisor provided identifier used by the guest to identify the TDI in guest messages.
+    pub guest_device_id: u16,
+    /// Status of the operation.
+    pub status: u16,
+    /// Flags for the range.
+    pub flags: u16,
+    /// Range ID of the MMIO range.
+    pub range_id: u16,
+    /// WRITE flag.
+    pub write: u32,
+    /// Reserved.
+    pub _reserved1: [u8; 4],
+}
+
+impl TioMsgMmioConfigRsp {
+    /// Indicates if certain TDISP flags can be updated.
+    pub fn is_mem_attr_updateable(&self) -> bool {
+        (self.flags & (1 << 3)) != 0
+    }
+
+    /// Indicates if the range can be mapped into either guest private memory or shared memory.
+    pub fn is_non_tee_mem(&self) -> bool {
+        (self.flags & (1 << 2)) != 0
+    }
+
+    /// Indicates if this range maps MSI-X PBA.
+    pub fn msix_pba(&self) -> bool {
+        (self.flags & (1 << 1)) != 0
+    }
+
+    /// Indicates if the range maps MSI-X table.
+    pub fn msix_table(&self) -> bool {
+        (self.flags & 1) != 0
+    }
+}
+
+static_assertions::const_assert_eq!(16, size_of::<TioMsgMmioConfigRsp>());
 
 /// Indicate which guest-selectable fields will be mixed into the key.
 /// See `GUEST_FIELD_SELECT` in Table 19, "SEV Secure Nested Paging Firmware ABI specification", Revision 1.55.

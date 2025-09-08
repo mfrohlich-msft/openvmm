@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 pub use tdisp::TdispCommandId;
+use tdisp::TdispDeviceReportType;
 use tdisp::TdispGuestUnbindReason;
 use tdisp::TdispUnbindReason;
 pub use tdisp::{TDISP_INTERFACE_VERSION_MAJOR, TDISP_INTERFACE_VERSION_MINOR};
@@ -64,8 +65,22 @@ pub trait VpciTdispInterface: Send + Sync {
         &self,
     ) -> impl Future<Output = anyhow::Result<tdisp::TdispDeviceInterfaceInfo>> + Send;
 
-    /// Request the device to bind to the current partition and transition to Locked.
+    /// Bind the device to the current partition and transition to Locked.
+    /// NOTE: While the device is in the Locked state, it can continue to
+    /// perform unencrypted operations until it is moved to the Running state.
+    /// The Locked state is a transitional state that is designed to keep
+    /// the device from modifying its resources prior to attestation.
     fn tdisp_bind_interface(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Start a bound device by transitioning it to the Run state from the Locked state.
+    /// This allows for attestation and for resources to be accepted into the guest context.
+    fn tdisp_start_device(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Request a device report from the TDI or physical device depending on the report type.
+    fn tdisp_get_device_report(
+        &self,
+        report_type: &TdispDeviceReportType,
+    ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send;
 
     /// Request to unbind the device and return to the Unlocked state.
     fn tdisp_unbind(

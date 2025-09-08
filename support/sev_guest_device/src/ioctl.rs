@@ -10,7 +10,9 @@ use crate::protocol;
 use std::fs::File;
 use std::os::fd::AsRawFd;
 use thiserror::Error;
+use zerocopy::FromBytes;
 use zerocopy::FromZeros;
+use zerocopy::Immutable;
 use zerocopy::IntoBytes;
 
 #[expect(missing_docs)] // self-explanatory fields
@@ -84,8 +86,8 @@ impl SevGuestDevice {
             msg_version: protocol::SNP_GUEST_REQ_MSG_VERSION,
             req_data: req.as_bytes().as_ptr() as u64,
             resp_data: resp.as_bytes().as_ptr() as u64,
-            exitinfo: protocol::VmmErrorCode::new_zeroed(),
-            exitinfo1: 0,
+            exitinfo1: protocol::VmmErrorCode::new_zeroed(),
+            exitinfo2: 0,
             msg_type: 0,
             req_size: 0,
             resp_size: 0,
@@ -126,8 +128,8 @@ impl SevGuestDevice {
             msg_version: protocol::SNP_GUEST_REQ_MSG_VERSION,
             req_data: req.as_bytes().as_ptr() as u64,
             resp_data: resp.as_bytes().as_ptr() as u64,
-            exitinfo: protocol::VmmErrorCode::new_zeroed(),
-            exitinfo1: 0,
+            exitinfo1: protocol::VmmErrorCode::new_zeroed(),
+            exitinfo2: 0,
             msg_type: 0,
             req_size: 0,
             resp_size: 0,
@@ -145,29 +147,34 @@ impl SevGuestDevice {
     }
 
     /// Invoke the `TIO_GUEST_REQUEST` ioctl via the device.
-    pub fn tio_guest_request(&mut self) -> Result<(), Error> {
-        let req = protocol::TioMsgTdiInfoReq {
-            guest_device_id: 0,
-            _reserved0: [0; 14],
-        };
+    fn tio_guest_request<RequestType, ResponseType>(
+        &mut self,
+        msg_type: u64,
+        guest_device_id: u16,
+        req: RequestType,
+    ) -> Result<ResponseType, Error>
+    where
+        RequestType: IntoBytes + Immutable + std::fmt::Debug,
+        ResponseType: FromZeros + IntoBytes + Immutable + std::fmt::Debug,
+    {
+        let resp = ResponseType::new_zeroed();
 
-        let resp = protocol::TioMsgTdiInfoRsp::new_zeroed();
-
-        let msg_type = 19; // TIO_MSG_TDI_INFO_REQ
         tracing::info!(
-            msg = "Issuing TIO_GUEST_REQUEST ioctl with value guest device 0x1 (msg_type = {:?})",
-            msg_type
+            msg = "tio_guest_request issuing ioctl",
+            msg_type,
+            req = ?req
         );
+
         let mut snp_guest_request = protocol::TioGuestRequestIoctl {
             msg_version: protocol::SNP_GUEST_REQ_MSG_VERSION,
             req_data: req.as_bytes().as_ptr() as u64,
             resp_data: resp.as_bytes().as_ptr() as u64,
-            exitinfo: protocol::VmmErrorCode::new_zeroed(),
-            exitinfo1: 0,
-            msg_type, // TIO_MSG_TDI_INFO_REQ
+            exitinfo1: protocol::VmmErrorCode::new_zeroed(),
+            exitinfo2: 0,
+            msg_type,
             req_size: req.as_bytes().len() as u64,
             resp_size: resp.as_bytes().len() as u64,
-            pci_id: 1, // TODO: Get the actual guest ID from the host
+            pci_id: guest_device_id as u64,
             additional_arg: 0,
         };
 
@@ -178,11 +185,45 @@ impl SevGuestDevice {
         }
 
         tracing::info!(
-            msg = "TIO_GUEST_REQUEST ioctl completed, guest_device_id = {:?}, tdi_status = {:?}",
-            resp.guest_device_id,
-            resp.tdi_status
+            msg = "tio_guest_request completed successfully",
+            resp = ?resp
         );
 
-        Ok(())
+        Ok(resp)
+    }
+
+    /// Invoke the `TIO_MSG_TDI_INFO_REQ` to a given TDISP guest device ID.
+    pub fn tio_msg_tdi_info_req(
+        &mut self,
+        guest_device_id: u16,
+    ) -> Result<protocol::TioMsgTdiInfoRsp, Error> {
+        let msg_type = 19; // TIO_MSG_TDI_INFO_REQ
+
+        let req = protocol::TioMsgTdiInfoReq {
+            guest_device_id,
+            _reserved0: [0; 14],
+        };
+
+        self.tio_guest_request(msg_type, guest_device_id, req)
+    }
+
+    /// Invoke the `TIO_MSG_MMIO_CONFIG_REQ` to a given TDISP guest device ID.
+    pub fn tio_msg_mmio_config_req(
+        &mut self,
+        guest_device_id: u16,
+        range_id: u16,
+    ) -> Result<protocol::TioMsgMmioConfigRsp, Error> {
+        let msg_type = 23; // TIO_MSG_MMIO_CONFIG_REQ
+
+        let req = protocol::TioMsgMmioConfigReq {
+            guest_device_id,
+            _reserved0: [0; 2],
+            flags: 0,
+            range_id,
+            write: 0,
+            _reserved2: [0; 4],
+        };
+
+        self.tio_guest_request(msg_type, guest_device_id, req)
     }
 }

@@ -19,13 +19,17 @@ use parking_lot::Mutex;
 use pci_core::spec::cfg_space::Command;
 use pci_core::spec::cfg_space::HeaderType00;
 use pci_core::spec::hwid::HardwareIds;
+use std::result;
 use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::GuestToHostResponse;
 use tdisp::TdispCommandId;
 use tdisp::TdispCommandResponsePayload;
+use tdisp::TdispDeviceReportType;
+use tdisp::TdispGuestOperationError;
 use tdisp::TdispGuestUnbindReason;
 use tdisp::TdispUnbindReason;
+use tdisp::command::TdispCommandRequestGetTdiReport;
 use tdisp::command::TdispCommandRequestPayload;
 use tdisp::command::TdispCommandRequestUnbind;
 use tdisp::serialize::SerializePacket;
@@ -408,7 +412,6 @@ impl MapVpciInterrupt for VpciDevice {
 }
 
 impl VpciTdispInterface for VpciDevice {
-    /// Sends a TDISP command to the device through the VPCI channel.
     async fn send_tdisp_command(
         &self,
         payload: GuestToHostCommand,
@@ -438,10 +441,20 @@ impl VpciTdispInterface for VpciDevice {
                 anyhow::anyhow!("failed to send tdisp command")
             })?;
 
-        Ok(res)
+        match res.result {
+            TdispGuestOperationError::Success => Ok(res),
+            _ => {
+                let err_msg = format!(
+                    "send_tdisp_command {:?} failed because host responded with an error: {:?}",
+                    payload.command_id, res.result
+                );
+
+                tracing::error!(msg = err_msg);
+                Err(anyhow::anyhow!(err_msg))
+            }
+        }
     }
 
-    /// Get the device interface info.
     async fn tdisp_get_device_interface_info(
         &self,
     ) -> anyhow::Result<tdisp::TdispDeviceInterfaceInfo> {
@@ -462,7 +475,6 @@ impl VpciTdispInterface for VpciDevice {
         }
     }
 
-    /// Bind the device to the current partition and transition to Locked.
     async fn tdisp_bind_interface(&self) -> anyhow::Result<()> {
         let res = self
             .send_tdisp_command(GuestToHostCommand {
@@ -474,6 +486,48 @@ impl VpciTdispInterface for VpciDevice {
         match res {
             Ok(resp) => match resp.payload {
                 TdispCommandResponsePayload::None => Ok(()),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn tdisp_start_device(&self) -> anyhow::Result<()> {
+        let res = self
+            .send_tdisp_command(GuestToHostCommand {
+                device_id: self.desc.slot.into_bits() as u64,
+                command_id: TdispCommandId::StartTdi,
+                payload: TdispCommandRequestPayload::None,
+            })
+            .await;
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::None => Ok(()),
+                _ => Err(anyhow::anyhow!("unexpected response payload")),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn tdisp_get_device_report(
+        &self,
+        report_type: &TdispDeviceReportType,
+    ) -> anyhow::Result<Vec<u8>> {
+        let res = self
+            .send_tdisp_command(GuestToHostCommand {
+                device_id: self.desc.slot.into_bits() as u64,
+                command_id: TdispCommandId::GetTdiReport,
+                payload: TdispCommandRequestPayload::GetTdiReport(
+                    TdispCommandRequestGetTdiReport {
+                        report_type: report_type.into(),
+                    },
+                ),
+            })
+            .await;
+
+        match res {
+            Ok(resp) => match resp.payload {
+                TdispCommandResponsePayload::GetTdiReport(resp) => Ok(resp.report_buffer),
                 _ => Err(anyhow::anyhow!("unexpected response payload")),
             },
             Err(e) => Err(e),
@@ -712,12 +766,6 @@ impl<M: RingMem> VpciClientWorker<M> {
 
                                 match entry {
                                     Tx::TdispCommand(rpc) => {
-                                        tracing::error!(
-                                            tx_id,
-                                            status = ?status,
-                                            "[TDISP TODO] tdisp command reply received"
-                                        );
-
                                         if status == protocol::Status::SUCCESS {
                                             let mut reader = p.reader();
 
@@ -740,13 +788,6 @@ impl<M: RingMem> VpciClientWorker<M> {
                                                     data.as_slice(),
                                                 )
                                                 .context("failed to deserialize tdisp response");
-
-                                            tracing::error!(
-                                                tx_id,
-                                                data_length = data_len,
-                                                host_response = ?host_response,
-                                                "[TDISP TODO] Received tdisp command reply"
-                                            );
 
                                             rpc.complete(
                                                 host_response
@@ -907,11 +948,6 @@ impl<M: RingMem> VpciClientWorker<M> {
     ) -> anyhow::Result<()> {
         let entry = self.tx.vacant_entry();
         let tx_id = index_to_tx_id(entry.key());
-        tracing::error!(
-            tx_id,
-            message = std::any::type_name_of_val(&msg),
-            "sending transaction"
-        );
 
         self.conn
             .queue

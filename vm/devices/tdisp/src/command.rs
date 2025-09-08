@@ -21,7 +21,7 @@ pub struct GuestToHostCommand {
 }
 
 /// Represents a response from a TDISP command sent to the host by a guest.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct GuestToHostResponse {
     /// The command ID.
     pub command_id: TdispCommandId,
@@ -112,13 +112,16 @@ pub struct TdispDeviceInterfaceInfo {
 }
 
 /// Serialized to and from the payload field of a TdispCommandResponse
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum TdispCommandResponsePayload {
     /// No payload.
     None,
 
     /// TdispCommandId::GetDeviceInterfaceInfo
     GetDeviceInterfaceInfo(TdispDeviceInterfaceInfo),
+
+    /// TdispCommandId::GetTdiReport
+    GetTdiReport(TdispCommandResponseGetTdiReport),
 }
 
 impl From<TdispDeviceInterfaceInfo> for TdispCommandResponsePayload {
@@ -135,9 +138,38 @@ pub enum TdispCommandRequestPayload {
 
     /// TdispCommandId::Unbind
     Unbind(TdispCommandRequestUnbind),
+
+    /// TdispCommandId::GetTdiReport
+    GetTdiReport(TdispCommandRequestGetTdiReport),
 }
 
 #[derive(Debug, Copy, Clone, FromBytes, IntoBytes, KnownLayout, Immutable)]
 pub struct TdispCommandRequestUnbind {
     pub unbind_reason: u64,
+}
+
+/// Represents a request to get a specific device report form the TDI.
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, KnownLayout, Immutable)]
+pub struct TdispCommandRequestGetTdiReport {
+    /// The type of report to request.
+    /// See: `TdispDeviceReportType``
+    pub report_type: u32,
+}
+
+/// Represents the payload of the resposne for a TdispCommandId::GetTdiReport.
+#[derive(Debug, Clone)]
+pub struct TdispCommandResponseGetTdiReport {
+    /// The type of report requested.
+    /// See: `TdispDeviceReportType``
+    pub report_type: u32,
+
+    /// The buffer containing the requested report.
+    pub report_buffer: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, KnownLayout, Immutable)]
+pub struct TdispSerializedCommandRequestGetTdiReport {
+    pub report_type: u32,
+    pub report_buffer_size: u32,
+    // Report buffer follows.
 }

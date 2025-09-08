@@ -9,6 +9,8 @@ use openhcl_tdisp_resources::VpciTdispInterface;
 use std::sync::Arc;
 use tdisp::GuestToHostCommand;
 use tdisp::TdispCommandId;
+use tdisp::TdispDeviceReport;
+use tdisp::TdispDeviceReportType;
 use tdisp::TdispGuestUnbindReason;
 use user_driver::DmaClient;
 use vmbus_client::local_use::Input;
@@ -161,23 +163,86 @@ pub async fn relay_vpci_bus(
 
     if let Ok(_) = res {
         let bind_res = vpci_device.tdisp_bind_interface().await;
-        tracing::info!(msg = format!("tdisp_bind_interface: {:?}", bind_res));
+        tracing::info!(msg = format!("tdisp_bind_interface first time: {:?}", bind_res));
+
+        if let Ok(_) = bind_res {
+            let start_res = vpci_device.tdisp_start_device().await;
+            tracing::info!(msg = format!("tdisp_start_device first time: {:?}", start_res));
+
+            if let Ok(_) = start_res {
+                tracing::info!(msg = "Issuing GHCB call to test TIO_GUEST_REQUEST ioctl");
+                let mut dev = sev_guest_device::ioctl::SevGuestDevice::open()
+                    .context("failed to open /dev/sev-guest")?;
+                tracing::info!(msg = "Opened /dev/sev-guest");
+
+                tracing::info!(msg = "Issuing GHCB call to test TIO_GUEST_REQUEST ioctl");
+
+                // TODO: Get the actual guest ID from the host
+                let guest_device_id = 1;
+
+                // TDISP TODO: Get the actual guest ID from the host
+                dev.tio_msg_tdi_info_req(guest_device_id)
+                    .context("failed to issue TIO_GUEST_REQUEST ioctl")?;
+
+                // // For each of the 6 BARs
+                // for i in 1..6 {
+                //     let guest_device_id = 1;
+                //     let range_id = i as u16;
+
+                //     tracing::info!(
+                //         msg = "Issuing GHCB call to test TIO_MSG_MMIO_CONFIG_REQ ioctl",
+                //         range_id
+                //     );
+
+                //     // TDISP TODO: Get the actual guest ID from the host
+                //     dev.tio_msg_mmio_config_req(guest_device_id, range_id)
+                //         .context("failed to issue TIO_MSG_MMIO_CONFIG_REQ ioctl")?;
+                // }
+
+                // A vector of all of the types of device reports that can be requested
+                let report_types = [
+                    TdispDeviceReportType::TdiReport(tdisp::TdispTdiReport::TdiInfoGuestDeviceId),
+                    TdispDeviceReportType::TdiReport(tdisp::TdispTdiReport::TdiInfoInterfaceReport),
+                    TdispDeviceReportType::DeviceReport(
+                        tdisp::TdispDeviceReport::DeviceInfoCertificateChain,
+                    ),
+                    TdispDeviceReportType::DeviceReport(
+                        tdisp::TdispDeviceReport::DeviceInfoMeasurements,
+                    ),
+                    TdispDeviceReportType::DeviceReport(
+                        tdisp::TdispDeviceReport::DeviceInfoIsRegistered,
+                    ),
+                ];
+
+                for report_type in report_types.iter() {
+                    let report_buffer = vpci_device
+                        .tdisp_get_device_report(report_type)
+                        .await
+                        .context("failed to get device report");
+
+                    match report_buffer {
+                        Ok(report_buffer) => {
+                            tracing::info!(
+                                msg = format!("Getting report {report_type:?} success"),
+                                report_buffer_len = report_buffer.len(),
+                            )
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                msg = format!("Getting report {report_type:?} failed"),
+                                error = ?e,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    {
-        tracing::info!(msg = "Issuing GHCB call to test TIO_GUEST_REQUEST ioctl");
-        let mut dev = sev_guest_device::ioctl::SevGuestDevice::open()
-            .context("failed to open /dev/sev-guest")?;
-        tracing::info!(msg = "Opened /dev/sev-guest");
-        dev.tio_guest_request()
-            .context("failed to issue TIO_GUEST_REQUEST ioctl")?;
-        tracing::info!(msg = "Issued GHCB call to test TIO_GUEST_REQUEST ioctl");
-    }
-
-    let unbind_res = vpci_device
-        .tdisp_unbind(TdispGuestUnbindReason::Graceful)
-        .await;
-    tracing::info!(msg = format!("tdisp_unbind: {:?}", unbind_res));
+    // let unbind_res = vpci_device
+    //     .tdisp_unbind(TdispGuestUnbindReason::Graceful)
+    //     .await;
+    // tracing::info!(msg = format!("tdisp_unbind: {:?}", unbind_res));
 
     let device_name = format!("assigned_device:vpci-{instance_id}");
     let device = chipset_builder
