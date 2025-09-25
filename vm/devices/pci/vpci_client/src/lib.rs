@@ -28,10 +28,12 @@ use tdisp::TdispCommandResponsePayload;
 use tdisp::TdispDeviceReportType;
 use tdisp::TdispGuestOperationError;
 use tdisp::TdispGuestUnbindReason;
+use tdisp::TdispTdiReport;
 use tdisp::TdispUnbindReason;
 use tdisp::command::TdispCommandRequestGetTdiReport;
 use tdisp::command::TdispCommandRequestPayload;
 use tdisp::command::TdispCommandRequestUnbind;
+use tdisp::devicereport::TdiReportStruct;
 use tdisp::serialize::SerializePacket;
 use vmbus_async::queue::IncomingPacket;
 use vmbus_async::queue::OutgoingPacket;
@@ -152,6 +154,11 @@ pub struct VpciDeviceDescription {
 }
 
 #[derive(Inspect)]
+pub struct VpciDeviceAttestationState {
+    pub has_attested: bool,
+}
+
+#[derive(Inspect)]
 pub struct VpciDevice {
     #[inspect(flatten)]
     desc: VpciDeviceDescription,
@@ -160,6 +167,9 @@ pub struct VpciDevice {
     bar_masks: [u32; 6],
     #[inspect(hex, iter_by_index)]
     bar_rao: [u32; 6],
+
+    // [TDISP TODO] Remove this once the TDISP interface is stable.
+    pub attestation_state: Mutex<VpciDeviceAttestationState>,
 }
 
 #[derive(Inspect)]
@@ -250,6 +260,9 @@ impl VpciDeviceDescription {
             }),
             bar_masks: requirements.bars,
             bar_rao,
+            attestation_state: Mutex::new(VpciDeviceAttestationState {
+                has_attested: false,
+            }),
         };
 
         Ok(device)
@@ -332,6 +345,27 @@ impl VpciDevice {
             _ => {}
         }
         accessor.write(self.desc.slot, offset, value);
+    }
+
+    pub fn configured_bars(&self) -> [u32; 6] {
+        let shadows = self.shadows.lock();
+
+        let mut bars = [0; 6];
+        for (i, &bar) in shadows.bars.iter().enumerate() {
+            bars[i] = bar;
+        }
+
+        bars
+    }
+
+    pub fn set_attested(&self, attested: bool) {
+        let mut locked = self.attestation_state.lock();
+        locked.has_attested = attested;
+    }
+
+    pub fn has_attested(&self) -> bool {
+        let locked = self.attestation_state.lock();
+        locked.has_attested
     }
 }
 
@@ -532,6 +566,36 @@ impl VpciTdispInterface for VpciDevice {
             },
             Err(e) => Err(e),
         }
+    }
+
+    async fn tdisp_get_tdi_report(&self) -> anyhow::Result<TdiReportStruct> {
+        let res = self
+            .tdisp_get_device_report(&TdispDeviceReportType::TdiReport(
+                TdispTdiReport::TdiInfoInterfaceReport,
+            ))
+            .await;
+
+        let buffer = res.context("failed to get TDI report")?;
+        tdisp::devicereport::deserialize_tdi_report(&buffer)
+            .context("failed to deserialize TDI report from host")
+    }
+
+    async fn tdisp_get_tdi_device_id(&self) -> anyhow::Result<u64> {
+        let res = self
+            .tdisp_get_device_report(&TdispDeviceReportType::TdiReport(
+                TdispTdiReport::TdiInfoGuestDeviceId,
+            ))
+            .await;
+
+        let buffer = res.context("failed to get TDI report")?;
+
+        // Ensure it's a u64
+        if buffer.len() != size_of::<u64>() {
+            return Err(anyhow::anyhow!("unexpected buffer size for TDI device ID"));
+        }
+
+        // Convert to u64
+        Ok(u64::from_le_bytes(buffer.try_into().unwrap()))
     }
 
     /// Request to unbind the device and return to the Unlocked state.

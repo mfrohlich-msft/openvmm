@@ -16,7 +16,9 @@
 #![allow(dead_code)]
 
 pub mod command;
+pub mod devicereport;
 pub mod serialize;
+use bitfield_struct::bitfield;
 use std::sync::Arc;
 
 use anyhow::Context;

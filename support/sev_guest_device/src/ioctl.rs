@@ -159,7 +159,7 @@ impl SevGuestDevice {
     {
         let resp = ResponseType::new_zeroed();
 
-        tracing::info!(
+        tracing::trace!(
             msg = "tio_guest_request issuing ioctl",
             msg_type,
             req = ?req
@@ -186,6 +186,7 @@ impl SevGuestDevice {
 
         tracing::info!(
             msg = "tio_guest_request completed successfully",
+            req = ?req,
             resp = ?resp
         );
 
@@ -222,6 +223,75 @@ impl SevGuestDevice {
             range_id,
             write: 0,
             _reserved2: [0; 4],
+        };
+
+        self.tio_guest_request(msg_type, guest_device_id, req)
+    }
+
+    /// Invoke the `TIO_MSG_MMIO_VALIDATE_REQ` to a given TDISP guest device ID.
+    pub fn tio_msg_mmio_validate_req(
+        &mut self,
+        guest_device_id: u16,
+        subrange_base: u64,
+        subrange_page_count: u32,
+        range_offset: u32,
+        range_id: u16,
+        validated: bool,
+        force_validated: bool,
+    ) -> Result<protocol::TioMsgMmioValidateRsp, Error> {
+        let msg_type = 21; // TIO_MSG_MMIO_VALIDATE_REQ 
+
+        let req = protocol::TioMsgMmioValidateReq {
+            guest_device_id,
+            _reserved0: [0; 14],
+            subrange_base,
+            subrange_page_count,
+            range_offset,
+            validated_flags: protocol::TioMsgMmioValidateReqFlags::new()
+                .with_force_validated(force_validated)
+                .with_validated(validated),
+            range_id,
+            _reserved2: [0; 12],
+        };
+
+        self.tio_guest_request(msg_type, guest_device_id, req)
+    }
+
+    /// Invoke the `TIO_MSG_SDTE_WRITE_REQ` to update the SDTE to allow DMA to the guest.
+    pub fn tio_msg_sdte_write_req(
+        &mut self,
+        guest_device_id: u16,
+    ) -> Result<protocol::TioMsgSdteWriteRsp, Error> {
+        let msg_type = 25; // TIO_MSG_SDTE_WRITE_REQ
+
+        let vtom = 0x7fffffff;
+        let vmpl = 2;
+        tracing::info!(
+            msg = format!("Sending SDTE write request for VMPL {vmpl:?} and vtom {vtom:x?}...")
+        );
+        let sdte = protocol::Sdte {
+            part1: protocol::SdtePart1::new()
+                .with_v(true)
+                .with_ir(true)
+                .with_iw(true),
+            _reserved0: 0,
+            _reserved1: 0,
+            part2: protocol::SdtePart2::new().with_vmpl(vmpl),
+            _reserved2: 0,
+            part3: protocol::SdtePart3::new()
+                .with_vtom_en(true)
+                .with_virtual_tom(vtom), // 2MB PFN [TDISP TODO] Update with proper VTOM
+            _reserved3: 0,
+            _reserved4: 0,
+        };
+
+        // Print sdte as a byte buffer
+        tracing::info!(msg = format!("SDTE: {:?}", sdte.as_bytes()));
+
+        let req = protocol::TioMsgSdteWriteReq {
+            guest_device_id,
+            _reserved0: [0; 14],
+            sdte,
         };
 
         self.tio_guest_request(msg_type, guest_device_id, req)

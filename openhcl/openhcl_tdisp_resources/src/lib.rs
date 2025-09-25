@@ -19,6 +19,7 @@ pub use tdisp::TdispCommandId;
 use tdisp::TdispDeviceReportType;
 use tdisp::TdispGuestUnbindReason;
 use tdisp::TdispUnbindReason;
+use tdisp::devicereport::TdiReportStruct;
 pub use tdisp::{TDISP_INTERFACE_VERSION_MAJOR, TDISP_INTERFACE_VERSION_MINOR};
 
 /// Represents a TDISP device assigned to a guest partition. This trait allows
@@ -81,6 +82,12 @@ pub trait VpciTdispInterface: Send + Sync {
         &self,
         report_type: &TdispDeviceReportType,
     ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send;
+
+    /// Request a TDI report from the TDI or physical device.
+    fn tdisp_get_tdi_report(&self) -> impl Future<Output = anyhow::Result<TdiReportStruct>> + Send;
+
+    /// Request the TDI device id from the vpci channel.
+    fn tdisp_get_tdi_device_id(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
 
     /// Request to unbind the device and return to the Unlocked state.
     fn tdisp_unbind(

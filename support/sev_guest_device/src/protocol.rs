@@ -271,6 +271,22 @@ pub struct TioMsgTdiInfoRsp {
 // Assert the size of the response field
 static_assertions::const_assert_eq!(192, size_of::<TioMsgTdiInfoRsp>());
 
+#[bitfield(u16)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct TioMsgMmioValidateReqFlags {
+    /// Desired value to set RMP. Validated for the range.
+    pub validated: bool,
+
+    /// 0: If subrange does not have RMP. Validated
+    /// set uniformly, fail.
+    /// 1: If subrange does not have RMP. Validated
+    /// set uniformly, force to requested value.
+    pub force_validated: bool,
+
+    #[bits(14)]
+    _reserved0: u16,
+}
+
 /// See `TIO_MSG_MMIO_VALIDATE_REQ` in Table 63, "SEV-TIO Firmware Interface Specification", Revision 0.91.
 #[repr(C)]
 #[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
@@ -286,7 +302,7 @@ pub struct TioMsgMmioValidateReq {
     /// Offset of the subrange within the MMIO range.
     pub range_offset: u32,
     /// Validated flags
-    pub validated_flags: u16,
+    pub validated_flags: TioMsgMmioValidateReqFlags,
     /// RangeID of MMIO range.
     pub range_id: u16,
     /// Reserved.
@@ -295,6 +311,16 @@ pub struct TioMsgMmioValidateReq {
 
 // Assert the size of the structure
 static_assertions::const_assert_eq!(48, size_of::<TioMsgMmioValidateReq>());
+
+#[bitfield(u16)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct TioMsgMmioValidateResFlags {
+    /// Indicates that the Validated bit has changed due to this operation.
+    pub changed: bool,
+
+    #[bits(15)]
+    _reserved0: u16,
+}
 
 /// See `TIO_MSG_MMIO_VALIDATE_RSP` in Table 64, "SEV-TIO Firmware Interface Specification", Revision 0.91.
 #[repr(C)]
@@ -313,7 +339,7 @@ pub struct TioMsgMmioValidateRsp {
     /// Offset of the subrange within the MMIO range.
     pub range_offset: u32,
     /// Validated flags
-    pub flag_bits: u16,
+    pub flag_bits: TioMsgMmioValidateResFlags,
     /// Range of the MMIO.
     pub range_id: u16,
     /// Reserved.
@@ -394,6 +420,90 @@ impl TioMsgMmioConfigRsp {
 }
 
 static_assertions::const_assert_eq!(16, size_of::<TioMsgMmioConfigRsp>());
+
+#[bitfield(u64)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct SdtePart1 {
+    // [0]
+    pub v: bool,
+
+    #[bits(60)]
+    _reserved0: u64,
+
+    pub ir: bool,
+
+    pub iw: bool,
+
+    _reserved1: bool,
+}
+
+#[bitfield(u64)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct SdtePart2 {
+    #[bits(49)]
+    pub _reserved0: u64,
+
+    #[bits(2)]
+    pub vmpl: u64,
+
+    #[bits(13)]
+    _reserved1: u64,
+}
+
+#[bitfield(u64)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+pub struct SdtePart3 {
+    pub vtom_en: bool,
+
+    #[bits(31)]
+    pub virtual_tom: u32,
+
+    #[bits(32)]
+    _reserved1: u64,
+}
+
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+#[repr(C)]
+pub struct Sdte {
+    pub part1: SdtePart1,
+    pub _reserved0: u64,
+    pub _reserved1: u64,
+    pub part2: SdtePart2,
+    pub _reserved2: u64,
+    pub part3: SdtePart3,
+    pub _reserved3: u64,
+    pub _reserved4: u64,
+}
+
+static_assertions::const_assert_eq!(size_of::<Sdte>(), 64);
+
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+pub struct TioMsgSdteWriteReq {
+    /// Hypervisor provided identifier used by the guest to identify the TDI in guest messages.
+    pub guest_device_id: u16,
+
+    pub _reserved0: [u8; 14],
+
+    /// sDTE to use to configure the guest controlled fields.
+    pub sdte: Sdte,
+}
+
+static_assertions::const_assert_eq!(size_of::<TioMsgSdteWriteReq>(), 80);
+
+/// See `TIO_MSG_SDTE_WRITE_RSP` in Table 69, "SEV-TIO Firmware Interface Specification", Revision 0.91.
+#[repr(C)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Debug)]
+pub struct TioMsgSdteWriteRsp {
+    /// Hypervisor provided PCIe Routing ID used by the guest to identify the TDI.
+    pub guest_device_id: u16,
+    /// Status of the operation.
+    pub status: u16,
+    /// Reserved.
+    pub _reserved0: [u8; 12],
+}
+
+static_assertions::const_assert_eq!(size_of::<TioMsgSdteWriteRsp>(), 16);
 
 /// Indicate which guest-selectable fields will be mixed into the key.
 /// See `GUEST_FIELD_SELECT` in Table 19, "SEV Secure Nested Paging Firmware ABI specification", Revision 1.55.

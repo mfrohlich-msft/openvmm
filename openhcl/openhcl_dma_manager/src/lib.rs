@@ -334,7 +334,6 @@ impl OpenhclDmaManager {
             )
         };
 
-        tracing::error!("-------------- private_ranges {:?}", private_ranges);
         let private_pool = if private_ranges.is_empty() {
             None
         } else {

@@ -6726,8 +6726,10 @@ name = "tdisp"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bitfield-struct 0.10.1",
  "inspect",
  "parking_lot",
+ "static_assertions",
  "thiserror 2.0.12",
  "tracing",
  "zerocopy 0.8.24",
