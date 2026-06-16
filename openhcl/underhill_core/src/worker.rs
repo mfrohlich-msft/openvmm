@@ -3252,11 +3252,13 @@ async fn new_underhill_vm(
             let connection = relay_filter.take();
 
             if enable_vpci_relay {
+                // Determine if we're doing a mock TDISP flow.
                 let test_tdisp_flow = matches!(
                     env_cfg.test_configuration,
                     Some(TestScenarioConfig::VpciTdispFlow)
                 );
 
+                // If we're doing a mock TDISP flow, we'll use a different resource validator.
                 use openhcl_tdisp::TdispResourceValidationInterface;
                 #[cfg(feature = "dev_snp_ohcl_tio_support")]
                 use openhcl_tdisp::TdispSevTioResourceValidator;
@@ -3264,6 +3266,8 @@ async fn new_underhill_vm(
 
                 use vpci_relay::*;
 
+                // Create a resource validator based on the test scenario. If it's a real CVM,
+                // we'll use a real resource validator. Otherwise, we'll use the noop validator.
                 #[cfg(feature = "dev_snp_ohcl_tio_support")]
                 let resource_validator: Option<
                     Arc<dyn TdispResourceValidationInterface>,
@@ -3275,6 +3279,7 @@ async fn new_underhill_vm(
                     Some(Arc::new(TdispNoopResourceValidator::new()))
                 };
 
+                // If TDISP feature is not enabled, we'll use the noop validator.
                 #[cfg(not(feature = "dev_snp_ohcl_tio_support"))]
                 let resource_validator: Option<
                     Arc<dyn TdispResourceValidationInterface>,

@@ -654,18 +654,18 @@ impl<T: RingMem> VpciChannelState<T> {
                             | protocol::ProtocolVersion::FE
                             | protocol::ProtocolVersion::GE
                             | protocol::ProtocolVersion::DT
-                            | protocol::ProtocolVersion::GE_TDISP => protocol::Status::SUCCESS,
+                            | protocol::ProtocolVersion::RB => protocol::Status::SUCCESS,
                             _ => protocol::Status::REVISION_MISMATCH,
                         };
 
                         // Echo `VB` for every legacy version (unchanged).
-                        // Echo `GE_TDISP` only when the guest requested it
+                        // Echo `RB` only when the guest requested it
                         // so it enables new tdisp interfaces without
                         // confusing downlevel consumers.
                         let reply_version = if status == protocol::Status::SUCCESS
-                            && version == protocol::ProtocolVersion::GE_TDISP
+                            && version == protocol::ProtocolVersion::RB
                         {
-                            protocol::ProtocolVersion::GE_TDISP
+                            protocol::ProtocolVersion::RB
                         } else {
                             protocol::ProtocolVersion::VB
                         };
@@ -943,7 +943,7 @@ impl ReadyState {
                     }
                     DeviceRequest::QueryIsolatedResources => {
                         let all_invalid = [protocol::ResourceIsolation::INVALID; 6];
-                        let reply = if self.vpci_version < protocol::ProtocolVersion::GE_TDISP {
+                        let reply = if self.vpci_version < protocol::ProtocolVersion::RB {
                             tracelimit::info_ratelimited!(
                                 instance_id = %dev.instance_id,
                                 negotiated_version = ?self.vpci_version,
@@ -1969,9 +1969,7 @@ mod tests {
 
         /// Send a `VPCI_QUERY_ISOLATED_RESOURCES` packet for slot 0 and
         /// read the completion reply.
-        async fn send_query_isolated_resources(
-            &mut self,
-        ) -> protocol::VpciIsolatedResourcesReply {
+        async fn send_query_isolated_resources(&mut self) -> protocol::VpciIsolatedResourcesReply {
             let msg = protocol::VpciQueryIsolatedResources {
                 message_type: protocol::MessageType::VPCI_QUERY_ISOLATED_RESOURCES,
                 slot: SlotNumber::new(),
@@ -2117,12 +2115,12 @@ mod tests {
         (reply.status, reply.protocol_version)
     }
 
-    /// Verify that `QUERY_PROTOCOL_VERSION` only echoes back `GE_TDISP` when
-    /// the guest requested `GE_TDISP`, and echoes `VB` for every other
+    /// Verify that `QUERY_PROTOCOL_VERSION` only echoes back `RB` when
+    /// the guest requested `RB`, and echoes `VB` for every other
     /// supported version. Unsupported versions still return
     /// `REVISION_MISMATCH` with `VB`.
     #[async_test]
-    async fn verify_version_negotiation_ge_tdisp_gated(driver: DefaultDriver) {
+    async fn verify_version_negotiation_RB_gated(driver: DefaultDriver) {
         let msi_controller = TestVpciInterruptController::new();
         let pci_config = HardwareIds {
             vendor_id: 0x123,
@@ -2166,7 +2164,7 @@ mod tests {
             );
         }
 
-        // GE_TDISP: server accepts and echoes `GE_TDISP`.
+        // RB: server accepts and echoes `RB`.
         {
             let pci = Arc::new(CloseableMutex::new(NullDevice {
                 config_space: ConfigSpaceType0Emulator::new(
@@ -2177,9 +2175,9 @@ mod tests {
             }));
             let mut guest = connected_device(&driver, pci, msi_controller.clone());
             let (status, echoed) =
-                query_version_reply(&mut guest, protocol::ProtocolVersion::GE_TDISP).await;
+                query_version_reply(&mut guest, protocol::ProtocolVersion::RB).await;
             assert_eq!(status, protocol::Status::SUCCESS);
-            assert_eq!(echoed, protocol::ProtocolVersion::GE_TDISP);
+            assert_eq!(echoed, protocol::ProtocolVersion::RB);
         }
 
         // Unknown version: rejected with VB.
@@ -2577,14 +2575,14 @@ mod tests {
     }
 
     /// Verify that `VPCI_QUERY_ISOLATED_RESOURCES` is answered locally on a
-    /// TDISP-isolation-capable mock device after negotiating `GE_TDISP`.
+    /// TDISP-isolation-capable mock device after negotiating `RB`.
     ///
     /// Exercises every branch of `build_isolation_reply`:
     /// - `Ready` → `SUCCESS` with the per-BAR/DMA classifications echoed.
     /// - `NotReady` → `INVALID_DEVICE_STATE` with all entries `INVALID`.
     /// - `NotTdispCapable` → `SUCCESS` with all entries `SHARED`.
     /// - `Error` → `UNSUCCESSFUL`.
-    /// - Downlevel negotiation (no `GE_TDISP`) → `NOT_SUPPORTED`.
+    /// - Downlevel negotiation (no `RB`) → `NOT_SUPPORTED`.
     #[async_test]
     async fn verify_query_isolated_resources(driver: DefaultDriver) {
         use tdisp::TdispIsolationReport;
@@ -2644,7 +2642,7 @@ mod tests {
                 })
                 .unwrap();
             let mut guest_driver = connected_device(&driver, pci.clone(), msi_controller);
-            guest_driver.protocol_version = protocol::ProtocolVersion::GE_TDISP;
+            guest_driver.protocol_version = protocol::ProtocolVersion::RB;
             guest_driver.start_device(0x1000000).await;
 
             let reply = guest_driver.send_query_isolated_resources().await;
@@ -2662,7 +2660,7 @@ mod tests {
             assert_eq!(reply.dma_isolation, expected_dma, "report {:?}", report);
         }
 
-        // Downlevel: negotiate `VB` instead of `GE_TDISP`. A `TestDevice` that
+        // Downlevel: negotiate `VB` instead of `RB`. A `TestDevice` that
         // exposes a valid isolation report still replies `NOT_SUPPORTED`
         // because the protocol gate is checked before consulting the device.
         let msi_controller = TestVpciInterruptController::new();
