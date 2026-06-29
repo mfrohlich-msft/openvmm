@@ -2639,6 +2639,7 @@ async fn new_underhill_vm(
                 cache_topology: None,
                 pcie_host_bridges: &vec![],
                 slit_info: None,
+                generic_initiators: &[],
                 arch: vmm_core::acpi_builder::AcpiArchConfig::X86 {
                     with_ioapic: capabilities.with_ioapic,
                     with_pic: capabilities.with_pic,
@@ -2646,7 +2647,7 @@ async fn new_underhill_vm(
                     with_psp: dps.general.psp_enabled,
                     pm_base: DEFAULT_PM_PIO_BASE,
                     acpi_irq: DEFAULT_ACPI_IRQ,
-                    amd_iommu: None,
+                    iommu: None,
                 },
             };
 
@@ -3445,11 +3446,9 @@ async fn new_underhill_vm(
                 vmm_core::device_builder::PciDeviceResolveContext {
                     driver_source: &driver_source,
                     resolver: &resolver,
-                    guest_memory: device_memory,
                     resource,
                     doorbell_registration: None,
                     shared_mem_mapper: None,
-                    software_iommu: false,
                 },
                 vmbus.control(),
                 &chipset_builder,
@@ -3458,6 +3457,7 @@ async fn new_underhill_vm(
                     vtom,
                     vnode: None,
                 },
+                device_memory.clone(),
                 |device_id| {
                     let device = partition
                         .new_virtual_device()

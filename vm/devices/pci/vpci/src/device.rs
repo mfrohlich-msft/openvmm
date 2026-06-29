@@ -1588,7 +1588,6 @@ mod tests {
     use pal_async::DefaultDriver;
     use pal_async::async_test;
     use pal_async::driver::SpawnDriver;
-    use pci_core::bus_range::AssignedBusRange;
     use pci_core::cfg_space_emu::BarMemoryKind;
     use pci_core::cfg_space_emu::ConfigSpaceType0Emulator;
     use pci_core::cfg_space_emu::DeviceBars;
@@ -2199,7 +2198,7 @@ mod tests {
 
     #[async_test]
     async fn verify_simple_capability(driver: DefaultDriver) {
-        let msi_conn = MsiConnection::new(AssignedBusRange::new(), 0);
+        let msi_conn = MsiConnection::new();
         let pci_config = HardwareIds {
             vendor_id: 0x123,
             device_id: 0x789,
@@ -2211,7 +2210,7 @@ mod tests {
             type0_sub_system_id: 0x1,
         };
         let (_msix, msix_capability) =
-            pci_core::capabilities::msix::MsixEmulator::new(0, 64, msi_conn.target());
+            pci_core::capabilities::msix::MsixEmulator::new(0, 64, &msi_conn.target());
 
         let msi_controller = TestVpciInterruptController::new();
         msi_conn.connect(msi_controller.signal_msi());
