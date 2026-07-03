@@ -882,6 +882,8 @@ impl UhVmNetworkSettings {
             (0..endpoints.len()).map(|_| false).collect::<Vec<bool>>(),
         ));
         let vf_manager = Arc::new(vf_manager);
+        tracing::info!("[!!!] VF Manager created for instance_id: {}", instance_id);
+        tracing::info!("[!!] Number of endpoints: {}", endpoints.len());
         for (
             i,
             HclNetworkVFManagerEndpointInfo {
@@ -1712,6 +1714,11 @@ async fn new_underhill_vm(
     if enable_vpci_relay && !with_vmbus_relay {
         anyhow::bail!("cannot run the VPCI relay without the VMBus relay");
     }
+
+    tracing::info!(
+        "[!!!!!!] enable_vpci_relay={enable_vpci_relay} with_vmbus_relay={with_vmbus_relay} hardware_isolated={hardware_isolated} hide_isolation={hide_isolation} with_vmbus={with_vmbus} dps.general.vmbus_redirection_enabled={}",
+        dps.general.vmbus_redirection_enabled
+    );
 
     // Construct chipset MMIO ranges from the positional convention in the
     // device tree: [0] = low (below 4 GiB), [1] = high (above RAM).
@@ -3497,6 +3504,7 @@ async fn new_underhill_vm(
         network_adapter_index: network_adapter_index.clone(),
     };
 
+    tracing::info!("[!!!] Controllers mana: {:#?}", controllers.mana);
     let mut netvsp_state = Vec::with_capacity(controllers.mana.len());
     if !controllers.mana.is_empty() {
         let _span = tracing::info_span!("network_settings", CVM_ALLOWED).entered();
@@ -3507,6 +3515,7 @@ async fn new_underhill_vm(
                 None
             };
 
+            tracing::info!("[!!!] Adding network: {:#?}", nic_config);
             let save_state = uh_network_settings
                 .add_network(
                     nic_config.instance_id,
