@@ -489,13 +489,13 @@ impl VpciDevice {
             }
             _ => self.config_space.lock().read(self.dev.id, offset),
         };
-        tracing::trace!(?offset, value, "config space read");
+        tracing::info!(?offset, value, "config space read");
         value
     }
 
     /// Writes device configuration space.
     pub fn write_cfg(&self, offset: u16, value: u32) {
-        tracing::trace!(?offset, value, "config space write");
+        tracing::info!(?offset, value, "config space write");
         let mut shadows = self.shadows.lock();
         let shadows = &mut *shadows;
         let mut accessor = self.config_space.lock();

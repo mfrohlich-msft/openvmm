@@ -414,7 +414,7 @@ impl VpciRelay {
                     pending: None,
                     waker: Waker::noop().clone(),
                     tdisp_capable,
-                    tdisp_config_space_locked: false,
+                    tdisp_config_space_locked: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 })
             })
             .await?;
@@ -564,9 +564,14 @@ struct RelayedVpciDevice {
     /// Whether config space writes are currently locked for this device.
     ///
     /// Starts `false`. Set to `true` on the MMIO-enable edge (once the device
-    /// has been bound/attested) and cleared back to `false` on unbind. While
-    /// `true`, incoming config space writes are dropped and logged.
-    tdisp_config_space_locked: bool,
+    /// has been bound/attested) and cleared back to `false` after unbind
+    /// completes. While `true`, incoming config space writes are dropped and
+    /// logged.
+    ///
+    /// This is shared with the deferred unbind future so it can clear the flag
+    /// once the unbind has actually finished.
+    #[inspect(skip)]
+    tdisp_config_space_locked: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ChipsetDevice for RelayedVpciDevice {
@@ -687,8 +692,12 @@ impl PciConfigSpace for RelayedVpciDevice {
         // deferred write is in flight at a time.
         let mmio_edge = if HeaderType00(offset) == HeaderType00::STATUS_COMMAND {
             use pci_core::spec::cfg_space::Command;
-            let prev = Command::from(self.device.read_cfg(offset) as u16).mmio_enabled();
-            let next = Command::from(value as u16).mmio_enabled();
+            // The STATUS_COMMAND dword packs the 16-bit Command register in the
+            // low two bytes and the 16-bit Status register in the high two
+            // bytes. Only the Command register is relevant here, so mask off
+            // the Status half before truncating to `u16`.
+            let prev = Command::from((self.device.read_cfg(offset) & 0xffff) as u16).mmio_enabled();
+            let next = Command::from((value & 0xffff) as u16).mmio_enabled();
             match (prev, next) {
                 (false, true) => Some(true),
                 (true, false) => Some(false),
@@ -702,17 +711,19 @@ impl PciConfigSpace for RelayedVpciDevice {
             Some(true) => {
                 // MMIO-enable edge: lock config space so that subsequent writes
                 // are dropped while the device is bound/running.
-                self.tdisp_config_space_locked = true;
+                self.tdisp_config_space_locked
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
 
                 let (write, token) = chipset_device::io::deferred::defer_write();
                 let device = self.device.clone();
                 let fut = Box::pin(async move {
-                    // MMIO-enable edge: issue the cfg write to start the device
-                    // before binding it
-                    device.write_cfg(offset, value);
 
                     // Bind and attest device
                     device.tdisp_on_device_activate().await
+                    
+                    // MMIO-enable edge: issue the cfg write to start the device
+                    // before binding it
+                    device.write_cfg(offset, value);
                 });
 
                 tracing::info!(
@@ -727,12 +738,10 @@ impl PciConfigSpace for RelayedVpciDevice {
                 IoResult::Defer(token)
             }
             Some(false) => {
-                // MMIO-disable edge (unbind): unlock config space again.
-                self.tdisp_config_space_locked = false;
-
                 // MMIO-disable edge: defer the cfg write until after the TDISP unbind.
                 let (write, token) = chipset_device::io::deferred::defer_write();
                 let device = self.device.clone();
+                let config_space_locked = self.tdisp_config_space_locked.clone();
                 let fut = Box::pin(async move {
                     let state = device.tdisp_tdi_state().await;
                     if state == TdispTdiState::Uninitialized || state == TdispTdiState::Unlocked {
@@ -746,6 +755,9 @@ impl PciConfigSpace for RelayedVpciDevice {
                         // unbind regardless of its outcome.
                         device.write_cfg(offset, value);
                     }
+
+                    // Unlock config space now that the unbind has completed.
+                    config_space_locked.store(false, std::sync::atomic::Ordering::SeqCst);
                 });
 
                 tracing::info!(
@@ -763,7 +775,7 @@ impl PciConfigSpace for RelayedVpciDevice {
                 // Drop (and log) any config space write while locked. The
                 // STATUS_COMMAND MMIO enable/disable edges are handled in the
                 // arms above so unbind can still unlock config space.
-                if self.tdisp_config_space_locked {
+                if self.tdisp_config_space_locked.load(std::sync::atomic::Ordering::SeqCst) {
                     tracing::info!(
                         offset,
                         value,
