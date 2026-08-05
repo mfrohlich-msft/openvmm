@@ -489,13 +489,25 @@ impl VpciDevice {
             }
             _ => self.config_space.lock().read(self.dev.id, offset),
         };
-        tracing::info!(?offset, value, "config space read");
+        tracing::info!(
+            ?offset,
+            value,
+            "config space read at {:#x} = {:#x}",
+            offset,
+            value
+        );
         value
     }
 
     /// Writes device configuration space.
     pub fn write_cfg(&self, offset: u16, value: u32) {
-        tracing::info!(?offset, value, "config space write");
+        tracing::info!(
+            ?offset,
+            value,
+            "config space write at {:#x} = {:#x}",
+            offset,
+            value
+        );
         let mut shadows = self.shadows.lock();
         let shadows = &mut *shadows;
         let mut accessor = self.config_space.lock();
@@ -532,9 +544,9 @@ impl VpciDevice {
     /// Clear the MMIO-enable and bus-master bits in both the shadowed
     /// command register and on the host-side device, as if the guest
     /// had written a STATUS_COMMAND value with MMIO and bus-master
-    /// disabled. Used to roll the command register back to the
-    /// deactivated state when attestation fails during
-    /// [`Self::tdisp_on_device_activate`].
+    /// disabled. Called on the unbind path
+    /// ([`Self::tdisp_on_device_deactivate`]) to explicitly leave the command
+    /// register in the expected off state after the device is unbound.
     ///
     /// This is not safety critical, this is for cleanup purposes only.
     fn clear_command_register(&self) {
@@ -545,8 +557,12 @@ impl VpciDevice {
         shadows.command = cleared;
         drop(shadows);
 
-        // Push the update through so the host observes MMIO and
-        // bus-master as disabled. Avoids re-entering the BAR-flush logic.
+        tracing::info!(
+            "clear_command_register: clearing command register MMIO and bus-master bits"
+        );
+
+        // Push the update through so the host observes MMIO and bus-master as
+        // disabled. Avoids re-entering vpci_relay logic.
         let mut accessor = self.config_space.lock();
         accessor.write(
             self.dev.id,
@@ -557,44 +573,40 @@ impl VpciDevice {
 
     /// Called on the STATUS_COMMAND MMIO disabled→enabled edge.
     ///
-    /// If the TDI is not already in `Run`, drives a bind/attest cycle first. On
-    /// attestation failure, the command register is rolled back to the
-    /// deactivated state via [`Self::clear_command_register`].
+    /// If the TDI is not already in `Run`, this will drive a bind/attest cycle
+    /// first. If the TDI is already in `Run`, this will unbind and rebind the
+    /// TDI to attest the device again.
     ///
     /// Then notifies TDISP about each currently active MMIO BAR via
     /// [`tdisp::VpciClientTdispState::tdisp_on_mmio_reconfigured`].
-    pub async fn tdisp_on_device_activate(&self) {
-        use openhcl_tdisp::TdispTdiState;
+    ///
+    /// Returns `true` only if attestation and every BAR notification succeeded
+    /// completely. The caller is responsible for enabling the command register
+    /// if and only if this returns `true`; on `false` the command register is
+    /// left off.
+    pub async fn tdisp_on_device_activate(&self) -> bool {
         use tdisp::TdispVpciAttestationInterface;
 
-        // If the TDI is not in Run, attest first. On failure roll the command
-        // register back so the guest sees the device as deactivated.
-        //
-        // This can be raced with TOCTOU, but it's not safety critical. `tdisp_attest_device`
-        // is atomic, either the attestation succeeds in its entirety and unblocks resources
-        // or it fails and the device remains inaccessible.
-        let state = self.tdisp_tdi_state().await;
-        if state != TdispTdiState::Run {
-            tracing::info!(
-                ?state,
-                "tdisp_on_device_activate: TDI not in Run, performing attestation"
-            );
-            let attest_result = match self.tdisp_query_capabilities().await {
-                Ok(interface_info) => self
-                    .tdisp_attest_device(interface_info)
-                    .await
-                    .context("tdisp_attest_device failed"),
-                Err(err) => Err(err.context("tdisp_query_capabilities failed")),
-            };
+        tracing::info!(
+            "tdisp_on_device_activate: guest enabled MMIO, attesting device and notifying TDISP of MMIO bars"
+        );
 
-            if let Err(err) = attest_result {
-                tracing::error!(
-                    error = &*err as &dyn std::error::Error,
-                    "tdisp_on_device_activate: attestation failed, rolling command register back to deactivated state"
-                );
-                self.tdisp_fail_attestation().await;
-                return;
-            }
+        // Attest the device.
+        let attest_result = match self.tdisp_query_capabilities().await {
+            Ok(interface_info) => self
+                .tdisp_attest_device(interface_info)
+                .await
+                .context("tdisp_attest_device failed"),
+            Err(err) => Err(err.context("tdisp_query_capabilities failed")),
+        };
+
+        if let Err(err) = attest_result {
+            tracing::error!(
+                error = &*err as &dyn std::error::Error,
+                "tdisp_on_device_activate: attestation failed, leaving command register off"
+            );
+            self.tdisp_fail_attestation().await;
+            return false;
         }
 
         let bars = self.shadows.lock().bars;
@@ -656,20 +668,27 @@ impl VpciDevice {
                         "failed to notify TDISP of active MMIO BAR. Failing activation."
                     );
                     self.tdisp_fail_attestation().await;
-                    return;
+                    return false;
                 }
             }
 
             i = next_i;
         }
+
+        true
     }
 
     /// Common teardown for any failure during the MMIO-enable activation
     /// path: post-Bind attestation failure, per-BAR unblock failure, or
-    /// similar. Unbinds the device and cleans up resources.
+    /// similar. Unbinds the device, clears the command register, and cleans up
+    /// resources.
     async fn tdisp_fail_attestation(&self) {
         use openhcl_tdisp::TdispGuestUnbindReason;
         use openhcl_tdisp::TdispVirtualDeviceInterface;
+
+        tracing::error!(
+            "tdisp_fail_attestation: unbinding TDI back to Unlocked due to attestation failure"
+        );
 
         if let Err(unbind_err) = self
             .tdisp_unbind(TdispGuestUnbindReason::ResourceSetupFailure)
@@ -680,6 +699,9 @@ impl VpciDevice {
                 "tdisp_fail_attestation: unbind failed"
             );
         }
+
+        // Always clear the command register so the device is left in the
+        // expected off state after a failed activation.
         self.clear_command_register();
     }
 
@@ -710,6 +732,11 @@ impl VpciDevice {
                 "tdisp_on_device_deactivate: unbind failed"
             );
         }
+
+        // Always clear the command register explicitly on the unbind path so the
+        // device is left in the expected off state regardless of the value the
+        // guest wrote or the outcome of the unbind.
+        self.clear_command_register();
     }
 }
 
