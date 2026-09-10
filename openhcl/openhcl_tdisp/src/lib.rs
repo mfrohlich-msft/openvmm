@@ -8,6 +8,9 @@
 //!
 //! See: `vm/devices/tdisp` for more information.
 
+#[cfg(feature = "dev_snp_ohcl_tio_support")]
+mod sevtio;
+
 pub mod noop;
 
 // Re-export the TDISP protocol types necessary for OpenHCL from top level tdisp crates
@@ -36,6 +39,9 @@ pub use tdisp_proto::TdispGuestUnbindReason;
 pub use tdisp_proto::TdispMmioRangeAction;
 pub use tdisp_proto::TdispReportType;
 pub use tdisp_proto::TdispTdiState;
+
+#[cfg(feature = "dev_snp_ohcl_tio_support")]
+pub use sevtio::TdispSevTioResourceValidator;
 
 use hvdef::Vtl;
 use std::future::Future;
