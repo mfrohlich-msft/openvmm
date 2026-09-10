@@ -10,6 +10,7 @@
 
 pub mod client;
 pub mod noop;
+mod tdxconnect;
 
 pub use client::TdispClient;
 pub use client::TdispCommandTransport;
@@ -40,6 +41,8 @@ pub use tdisp_proto::TdispGuestUnbindReason;
 pub use tdisp_proto::TdispMmioRangeAction;
 pub use tdisp_proto::TdispReportType;
 pub use tdisp_proto::TdispTdiState;
+
+pub use tdxconnect::TdispTdxConnectResourceValidator;
 
 use hvdef::Vtl;
 use std::future::Future;
@@ -220,8 +223,13 @@ pub fn new_resource_validator(
         return Ok(Arc::new(noop::TdispNoopResourceValidator::new()));
     }
 
-    // TODO: Add platform-specific resource validators based on the isolation type.
-    // This will follow in subsequent PRs.
+    // A standalone `if` rather than a `match` arm, so that each platform's
+    // validator can be added independently of the others.
+    if matches!(isolation, IsolationType::Tdx) {
+        return Ok(Arc::new(TdispTdxConnectResourceValidator::new(
+            vtom.unwrap_or(0),
+        )?));
+    }
 
     Ok(Arc::new(noop::TdispNoopResourceValidator::new()))
 }

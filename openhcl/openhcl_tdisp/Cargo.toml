@@ -7,12 +7,15 @@ rust-version.workspace = true
 edition.workspace = true
 
 [dependencies]
+hcl.workspace = true
 hvdef.workspace = true
 inspect.workspace = true
+memory_range.workspace = true
 parking_lot.workspace = true
 tdisp.workspace = true
 tdisp_proto.workspace = true
 virt.workspace = true
+x86defs.workspace = true
 
 anyhow.workspace = true
 futures.workspace = true
