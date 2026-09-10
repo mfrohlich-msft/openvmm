@@ -3383,16 +3383,31 @@ async fn new_underhill_vm(
                 );
 
                 use openhcl_tdisp::TdispResourceValidationInterface;
+                #[cfg(feature = "dev_snp_ohcl_tio_support")]
+                use openhcl_tdisp::TdispSevTioResourceValidator;
                 use openhcl_tdisp::noop::TdispNoopResourceValidator;
 
                 use vpci_relay::*;
 
-                // A device driven through the TDISP flow always has a
-                // validator, so no platform can silently skip resource
-                // validation. Isolation types with no platform validator of
-                // their own get the no-op one.
+                // The mock TDISP flow always uses the no-op validator, since it
+                // runs on hosts that are not necessarily confidential.
+                // Otherwise pick a validator by isolation type. A device driven
+                // through the TDISP flow always has one, so no platform can
+                // silently skip resource validation. SEV-TIO stays behind its
+                // feature, so an isolation type with no validator of its own,
+                // or with SEV-TIO compiled out, gets the no-op one.
                 let resource_validator: Arc<dyn TdispResourceValidationInterface> =
-                    Arc::new(TdispNoopResourceValidator::new());
+                    if test_tdisp_flow {
+                        Arc::new(TdispNoopResourceValidator::new())
+                    } else {
+                        match isolation {
+                            #[cfg(feature = "dev_snp_ohcl_tio_support")]
+                            virt::IsolationType::Snp => {
+                                Arc::new(TdispSevTioResourceValidator::new(vtom.unwrap_or(0))?)
+                            }
+                            _ => Arc::new(TdispNoopResourceValidator::new()),
+                        }
+                    };
 
                 let mut relay = VpciRelay::new(
                     driver_source.clone(),
