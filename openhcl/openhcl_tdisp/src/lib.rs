@@ -8,6 +8,8 @@
 //!
 //! See: `vm/devices/tdisp` for more information.
 
+mod tdxconnect;
+
 pub mod noop;
 
 // Re-export the TDISP protocol types necessary for OpenHCL from top level tdisp crates
@@ -36,6 +38,8 @@ pub use tdisp_proto::TdispGuestUnbindReason;
 pub use tdisp_proto::TdispMmioRangeAction;
 pub use tdisp_proto::TdispReportType;
 pub use tdisp_proto::TdispTdiState;
+
+pub use tdxconnect::TdispTdxConnectResourceValidator;
 
 use hvdef::Vtl;
 use std::future::Future;
